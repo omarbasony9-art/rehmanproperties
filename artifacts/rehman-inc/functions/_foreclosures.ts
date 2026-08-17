@@ -73,6 +73,18 @@ export interface SyncSummary {
   valuated: number;
   errors: number;
   durationMs: number;
+  // Safe diagnostics — never includes key values
+  zillowConfigured: boolean;
+  redfinConfigured: boolean;
+  rentcastConfigured: boolean;
+  /** Listings that passed the needsValuation check (eligible by address + upset threshold + cache) */
+  needsValuationCount: number;
+  /** How many times fetchZillowEstimate was actually invoked */
+  zillowAttempts: number;
+  /** Estimates returned with a non-null dollar value */
+  zillowSuccesses: number;
+  /** Invocations that returned estimate=null (NOT_CONFIGURED, NOT_FOUND, ERROR, rate-limited) */
+  zillowFailures: number;
 }
 
 export interface ListingRow {
@@ -1257,6 +1269,11 @@ export async function runSync(countySlug: string, db: D1Database, env: FcEnv): P
   let upserted = 0;
   let valuated = 0;
   let errors = 0;
+  // Diagnostic counters — safe booleans/numbers, no key values ever exposed
+  let needsValuationCount = 0;
+  let zillowAttempts = 0;
+  let zillowSuccesses = 0;
+  let zillowFailures = 0;
 
   for (let di = 0; di < toDetail.length; di++) {
     const stub = toDetail[di]!;
@@ -1328,14 +1345,25 @@ export async function runSync(countySlug: string, db: D1Database, env: FcEnv): P
       detail.upsetAmount != null && detail.upsetAmount <= VALUATION_UPSET_THRESHOLD;
 
     if (needsValuation && detail.address && detail.city) {
+      needsValuationCount++;
       await sleep(500);
+      zillowAttempts++;
       const zillow = await fetchZillowEstimate(
         detail.address, detail.city, detail.state ?? "NJ", detail.zipCode ?? "", env,
       );
       // Redfin is intentionally NOT called during sync — on-demand only via
       // POST /api/foreclosures/listings/:sheriff/valuate (matches Preview behavior).
       newValuation = { zillow };
-      if (zillow.estimate != null) valuated++;
+      if (zillow.estimate != null) {
+        valuated++;
+        zillowSuccesses++;
+      } else {
+        zillowFailures++;
+        console.log(
+          `[foreclosures] Zillow ${zillow.status} for ${detail.sheriffNumber} ` +
+          `(keyPresent=${Boolean(env.ZILLOW_RAPIDAPI_KEY)})`,
+        );
+      }
     }
 
     try {
@@ -1355,6 +1383,14 @@ export async function runSync(countySlug: string, db: D1Database, env: FcEnv): P
     valuated,
     errors,
     durationMs: Date.now() - start,
+    // Safe diagnostics — values are booleans/counts, never secret values
+    zillowConfigured:   Boolean(env.ZILLOW_RAPIDAPI_KEY),
+    redfinConfigured:   Boolean(env.REDFIN_RAPIDAPI_KEY),
+    rentcastConfigured: Boolean((env as Record<string, unknown>).RENTCAST_API_KEY),
+    needsValuationCount,
+    zillowAttempts,
+    zillowSuccesses,
+    zillowFailures,
   };
 }
 

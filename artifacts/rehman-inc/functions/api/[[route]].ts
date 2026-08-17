@@ -1190,15 +1190,12 @@ app.post("/foreclosures/sync/:county", async (c) => {
 
   await ensureFcSchema(c.env);
 
-  const fcEnv = {
-    ZILLOW_RAPIDAPI_KEY: c.env.ZILLOW_RAPIDAPI_KEY,
-    ZILLOW_RAPIDAPI_HOST: c.env.ZILLOW_RAPIDAPI_HOST,
-    REDFIN_RAPIDAPI_KEY: c.env.REDFIN_RAPIDAPI_KEY,
-    REDFIN_RAPIDAPI_HOST: c.env.REDFIN_RAPIDAPI_HOST,
-  };
-
+  // Pass c.env directly — it is a structural superset of FcEnv and is proven
+  // to contain the RapidAPI keys (c.env.ZILLOW_RAPIDAPI_KEY is truthy per the
+  // /stats endpoint). A manually-constructed fcEnv object introduces a copy step
+  // that could silently lose values if the Env type diverges from FcEnv.
   try {
-    const summary = await runSync(countySlug, c.env.DB, fcEnv);
+    const summary = await runSync(countySlug, c.env.DB, c.env);
     return c.json({ ok: true, ...summary });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);

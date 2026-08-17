@@ -1,0 +1,149 @@
+We have now isolated the exact valuation configuration problem.
+
+DO NOT redesign anything.
+
+Production GET /api/foreclosures/stats returns:
+
+{
+  "zillowConfigured": true,
+  "redfinConfigured": true,
+  "rentcastConfigured": true
+}
+
+So Cloudflare DEFINITELY sees:
+
+ZILLOW_RAPIDAPI_KEY
+ZILLOW_RAPIDAPI_HOST
+REDFIN_RAPIDAPI_KEY
+REDFIN_RAPIDAPI_HOST
+RENTCAST_API_KEY
+
+However Refresh CivilView returns:
+
+Atlantic:
+{
+  "detailsFetched": 15,
+  "upserted": 15,
+  "valuated": 0,
+  "errors": 0
+}
+
+Cape May:
+{
+  "detailsFetched": 15,
+  "upserted": 15,
+  "valuated": 0,
+  "errors": 0
+}
+
+And the listings API returns records with:
+
+zillowEstimate: null
+zillowStatus: "NOT_CONFIGURED"
+
+redfinEstimate: null
+redfinStatus: "NOT_CONFIGURED"
+
+estimatedMarketValue: null
+marketValueSource: "NONE"
+
+Therefore this is NOT a missing Cloudflare secret.
+
+The secrets are available in c.env at the route layer, but the environment/config object being passed into runSync / fetchZillowEstimate is almost certainly missing those values.
+
+TRACE THE ACTUAL DATA FLOW.
+
+Inspect:
+
+artifacts/rehman-inc/functions/api/[[route]].ts
+artifacts/rehman-inc/functions/_foreclosures.ts
+
+Specifically inspect the handlers for:
+
+POST /foreclosures/sync/atlantic
+POST /foreclosures/sync/cape-may
+
+and trace:
+
+c.env
+→ FcEnv
+→ runSync(...)
+→ fetchZillowEstimate(...)
+→ any valuation helper
+
+Find exactly where ZILLOW_RAPIDAPI_KEY and ZILLOW_RAPIDAPI_HOST disappear.
+
+Compare this against the stats route, because the stats route proves c.env contains the key.
+
+I suspect the sync routes may be passing only DB or a partial object into runSync, or constructing FcEnv without the RapidAPI variables.
+
+DO NOT assume — inspect the actual function signatures and calls.
+
+Make runSync receive the COMPLETE server-side environment required for valuation:
+
+DB
+ZILLOW_RAPIDAPI_KEY
+ZILLOW_RAPIDAPI_HOST
+REDFIN_RAPIDAPI_KEY
+REDFIN_RAPIDAPI_HOST
+RENTCAST_API_KEY
+
+and anything else already required.
+
+For example, if runSync expects FcEnv, the sync route should pass the proper complete FcEnv built from c.env rather than a partial object.
+
+IMPORTANT:
+Do not expose the secret values.
+Do not send keys to the browser.
+Do not hardcode anything.
+
+ADD SAFE TEMPORARY DIAGNOSTICS TO THE SYNC RESPONSE.
+
+I want the sync JSON response to include safe booleans like:
+
+{
+  "zillowConfigured": true,
+  "redfinConfigured": true,
+  "rentcastConfigured": true,
+  "zillowAttempts": 5,
+  "zillowSuccesses": 3,
+  "zillowFailures": 2
+}
+
+Never include actual secret values.
+
+Also investigate why:
+
+valuated: 0
+errors: 0
+
+even though the resulting records say NOT_CONFIGURED.
+
+A NOT_CONFIGURED valuation attempt should be visible in diagnostics rather than silently resulting in valuated=0/errors=0.
+
+After the environment propagation is fixed, a listing like:
+
+104 East MARYLAND Avenue
+Rio Grande, NJ 08242
+
+must actually reach the Zillow provider instead of immediately returning NOT_CONFIGURED.
+
+Keep the existing 7-day cache behavior.
+
+Do not restore automatic Redfin during CivilView sync if the working Replit Preview only automatically used Zillow.
+
+Redfin can remain on-demand exactly as Preview worked.
+
+Run TypeScript checks and production build.
+
+Then tell me:
+
+1. EXACTLY where the Cloudflare env was being lost.
+2. The old runSync call/signature.
+3. The corrected runSync call/signature.
+4. Whether fetchZillowEstimate now receives ZILLOW_RAPIDAPI_KEY and HOST.
+5. Why valuated was 0 with errors 0.
+6. What safe diagnostics you added to the sync response.
+7. Which files changed.
+
+DO NOT push to GitHub yet.
