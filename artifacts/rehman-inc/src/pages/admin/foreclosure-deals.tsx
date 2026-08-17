@@ -254,7 +254,9 @@ export default function AdminForeclosureDeals() {
         ) : dealsQ.isError ? (
           <div className="flex flex-col items-center justify-center h-40 text-muted-foreground gap-2">
             <p className="text-sm font-medium text-destructive">Unable to load deals.</p>
-            <p className="text-xs">Check that the Foreclosure Tracker service is running.</p>
+            <p className="text-xs text-muted-foreground">
+              {dealsQ.error instanceof Error ? dealsQ.error.message : "Network error — check the browser console for details."}
+            </p>
           </div>
         ) : deals.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-40 text-muted-foreground gap-2">

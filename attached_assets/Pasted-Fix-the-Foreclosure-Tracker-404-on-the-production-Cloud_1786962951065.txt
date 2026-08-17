@@ -1,0 +1,92 @@
+Fix the Foreclosure Tracker 404 on the production Cloudflare site.
+
+I confirmed the problem is in:
+
+artifacts/rehman-inc/functions/api/[[route]].ts
+
+The file currently imports:
+
+ensureForeclosuresTable
+runSync
+queryListings
+queryStats
+getForeclosureBySherifffNumber
+valuateListing
+recalculateListing
+updateRedfinEstimate
+
+from ../_foreclosures
+
+BUT the Cloudflare Hono app does not appear to actually register the foreclosure API routes, which is why the live site returns HTTP 404.
+
+DO NOT redesign anything.
+DO NOT create another server.
+DO NOT make the tracker depend on the Replit backend.
+DO NOT change my Cloudflare secrets.
+DO NOT push to GitHub yet.
+
+FIRST inspect the Foreclosure Tracker frontend and determine the EXACT API URLs it is currently requesting.
+
+Then add the matching same-origin Cloudflare routes inside:
+
+artifacts/rehman-inc/functions/api/[[route]].ts
+
+The routes must run through the existing Hono app whose basePath is "/api".
+
+At minimum make the production tracker support whatever the frontend currently requires for:
+
+- foreclosure listings
+- foreclosure stats
+- listing detail
+- sync / refresh listings
+- valuation / refresh valuation if currently used
+- Redfin estimate update if currently used
+
+Prefer routes shaped like:
+
+GET /api/foreclosures/listings
+GET /api/foreclosures/stats
+GET /api/foreclosures/listings/:sheriffNumber
+POST /api/foreclosures/sync
+POST /api/foreclosures/sync/atlantic
+POST /api/foreclosures/sync/cape-may
+
+BUT do not blindly use those names if the frontend is requesting different paths. Make the frontend and Cloudflare backend use the SAME paths.
+
+IMPORTANT:
+
+1. All foreclosure admin routes must require the existing admin_token authentication just like the other admin APIs.
+2. Use credentials: "include" in the frontend requests.
+3. Read listings from Cloudflare D1.
+4. Reuse the existing functions in _foreclosures.ts instead of rebuilding the scraper.
+5. Make sure ensureForeclosuresTable runs before foreclosure DB queries if needed.
+6. Do not use localhost.
+7. Do not use a Replit URL.
+8. Do not use an Express-only endpoint in production.
+9. Do not add another paid service.
+10. Keep Zillow, Redfin and RentCast credentials server-side.
+11. Do not expose secret values.
+12. Keep Atlantic County and Cape May County support.
+13. Keep the default UPSET numeric low-to-high sorting.
+14. Preserve all current tracker tabs and filters.
+
+Also replace the outdated frontend error:
+
+"Check that the Foreclosure Tracker service is running."
+
+with:
+
+"Unable to load foreclosure listings."
+
+If the API returns an error, log the actual HTTP status and API response to the browser console for debugging.
+
+After making the fix:
+
+- run the Rehman INC production build
+- run TypeScript checks
+- verify the route definitions actually exist in [[route]].ts
+- tell me the EXACT frontend listings URL
+- tell me the EXACT Hono route that handles it
+- tell me whether any D1 migration is required
+
+DO NOT push to GitHub. I will do the push manually after reviewing your result.

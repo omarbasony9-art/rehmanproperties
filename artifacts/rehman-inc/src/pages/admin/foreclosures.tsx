@@ -623,8 +623,10 @@ export default function AdminForeclosures() {
             <div className="flex items-center justify-center h-40"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>
           ) : listQ.isError ? (
             <div className="flex flex-col items-center justify-center h-40 gap-2 text-muted-foreground">
-              <p className="text-sm text-destructive">Unable to load listings.</p>
-              <p className="text-xs">Check that the Foreclosure Tracker service is running.</p>
+              <p className="text-sm text-destructive">Unable to load foreclosure listings.</p>
+              <p className="text-xs text-muted-foreground">
+                {listQ.error instanceof Error ? listQ.error.message : "Network error — check the browser console for details."}
+              </p>
             </div>
           ) : listings.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-40 gap-2 text-muted-foreground">
