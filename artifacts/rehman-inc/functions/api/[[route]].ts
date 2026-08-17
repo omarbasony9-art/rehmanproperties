@@ -39,6 +39,7 @@ type Env = {
   ZILLOW_RAPIDAPI_HOST?: string;
   REDFIN_RAPIDAPI_KEY?: string;
   REDFIN_RAPIDAPI_HOST?: string;
+  RENTCAST_API_KEY?: string;
 };
 
 const {
@@ -1147,7 +1148,13 @@ app.get("/foreclosures/stats", async (c) => {
   try {
     await ensureFcSchema(c.env);
     const stats = await queryStats(c.env.DB);
-    return c.json(stats);
+    return c.json({
+      ...stats,
+      // Safe booleans only — key values are never sent to the browser
+      zillowConfigured:   Boolean(c.env.ZILLOW_RAPIDAPI_KEY),
+      redfinConfigured:   Boolean(c.env.REDFIN_RAPIDAPI_KEY),
+      rentcastConfigured: Boolean(c.env.RENTCAST_API_KEY),
+    });
   } catch (err) {
     const detail = err instanceof Error ? err.message : String(err);
     console.error("[foreclosures/stats] error:", err);

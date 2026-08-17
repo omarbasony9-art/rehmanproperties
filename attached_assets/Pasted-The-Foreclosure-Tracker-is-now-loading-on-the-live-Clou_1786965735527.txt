@@ -1,0 +1,116 @@
+The Foreclosure Tracker is now loading on the live Cloudflare site, but it shows this warning:
+
+"Valuation not configured
+All listings show 'Not valued' because no Zillow API key is set. Add ZILLOW_RAPIDAPI_KEY to your Replit secrets..."
+
+THIS IS WRONG FOR PRODUCTION.
+
+ZILLOW_RAPIDAPI_KEY is already configured as a Secret in Cloudflare Pages for the rehmanproperties project.
+
+I also already have these production Cloudflare secrets:
+
+ZILLOW_RAPIDAPI_KEY
+ZILLOW_RAPIDAPI_HOST
+REDFIN_RAPIDAPI_KEY
+REDFIN_RAPIDAPI_HOST
+RENTCAST_API_KEY
+
+Do NOT ask me to add these to Replit.
+Do NOT expose their values.
+Do NOT hardcode them.
+Do NOT change my Cloudflare secrets.
+
+Inspect the production Cloudflare foreclosure valuation code and determine why it thinks ZILLOW_RAPIDAPI_KEY is missing.
+
+IMPORTANT:
+Cloudflare Pages Functions environment variables must be read from the Cloudflare Function env/bindings object, NOT from Node-only process.env unless the architecture explicitly provides that.
+
+Inspect:
+
+artifacts/rehman-inc/functions/_foreclosures.ts
+artifacts/rehman-inc/functions/api/[[route]].ts
+
+and any Zillow / Redfin / RentCast valuation helper files.
+
+Find every place that accesses:
+
+ZILLOW_RAPIDAPI_KEY
+ZILLOW_RAPIDAPI_HOST
+REDFIN_RAPIDAPI_KEY
+REDFIN_RAPIDAPI_HOST
+RENTCAST_API_KEY
+
+Make sure production Cloudflare Pages Functions receive the env object and correctly pass the keys into the valuation functions.
+
+For example, if code currently does something like:
+
+process.env.ZILLOW_RAPIDAPI_KEY
+
+but the Cloudflare function already has access to:
+
+c.env.ZILLOW_RAPIDAPI_KEY
+
+or the equivalent Pages Function env object,
+
+fix the architecture so the Cloudflare env values are passed correctly.
+
+Also inspect the "Valuation not configured" detection.
+
+It must determine configuration based on the SERVER-SIDE Cloudflare environment, not frontend Vite variables and not Replit Secrets.
+
+Never send API keys to the browser.
+
+The frontend should only receive safe booleans/status such as:
+
+{
+  "zillowConfigured": true,
+  "redfinConfigured": true,
+  "rentcastConfigured": true
+}
+
+Do NOT return secret values.
+
+Also change the outdated message:
+
+"Add ZILLOW_RAPIDAPI_KEY to your Replit secrets"
+
+Production wording should be something like:
+
+"Zillow valuation is not configured on the production server."
+
+But if the Cloudflare secret is correctly available, the warning should disappear completely.
+
+Then verify the actual Zillow valuation route.
+
+When I click Refresh Zillow, it must:
+
+1. Call the Cloudflare /api/... route.
+2. Use ZILLOW_RAPIDAPI_KEY server-side.
+3. Use ZILLOW_RAPIDAPI_HOST server-side.
+4. Query the existing Zillow RapidAPI integration.
+5. Validate the returned property/address.
+6. Save the Zillow value/status to D1.
+7. Return safe JSON to the frontend.
+8. Never expose the API key.
+
+Do the same validation for Redfin and RentCast environment access.
+
+Add safe diagnostic information to the tracker stats/config endpoint such as:
+
+zillowConfigured: Boolean(env.ZILLOW_RAPIDAPI_KEY)
+redfinConfigured: Boolean(env.REDFIN_RAPIDAPI_KEY)
+rentcastConfigured: Boolean(env.RENTCAST_API_KEY)
+
+Again: NEVER return the key values.
+
+Run production build and TypeScript checks.
+
+After fixing it tell me:
+
+1. Why Cloudflare was reporting Zillow as unconfigured.
+2. Which file was reading the environment incorrectly.
+3. Whether Zillow/Redfin/RentCast now read Cloudflare secrets correctly.
+4. The exact API route used by Refresh Zillow.
+5. Which files changed.
+
+DO NOT push to GitHub yet.

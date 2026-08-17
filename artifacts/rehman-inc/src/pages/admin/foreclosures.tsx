@@ -87,6 +87,9 @@ interface Stats {
   strong: number;
   under280: number;
   lastUpdated: string | null;
+  zillowConfigured: boolean;
+  redfinConfigured: boolean;
+  rentcastConfigured: boolean;
 }
 
 // ─── Tabs ─────────────────────────────────────────────────────────────────────
@@ -569,18 +572,16 @@ export default function AdminForeclosures() {
           </div>
         )}
 
-        {/* Setup callout — only shown when no properties have been valued */}
-        {health && health.listingCount > 0 && health.majorDeals === 0 &&
-          listings.every((l) => l.dealRating === "UNKNOWN") && (
+        {/* Setup callout — only shown when Zillow is not configured on the production server */}
+        {stats && !stats.zillowConfigured && (
           <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-4 flex gap-3">
             <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
             <div className="text-sm">
               <p className="font-semibold text-amber-800 dark:text-amber-300">Valuation not configured</p>
               <p className="text-amber-700 dark:text-amber-400 mt-0.5">
-                All {health.listingCount} listings show "Not valued" because no Zillow API key is set.
-                Add <code className="bg-amber-100 dark:bg-amber-800/50 px-1 rounded font-mono text-xs">ZILLOW_RAPIDAPI_KEY</code> to
-                your Replit secrets, then click a property → <strong>Refresh Zillow</strong> to value it, or use the bulk refresh endpoint.
-                You can also enter Redfin estimates manually on any property.
+                Zillow valuation is not configured on the production server.
+                {!stats.redfinConfigured && " Redfin valuation is also not configured."}
+                {" "}Contact your system administrator to enable property valuations.
               </p>
             </div>
           </div>
