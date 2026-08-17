@@ -1,0 +1,358 @@
+STOP making frontend changes.
+
+Neither Zillow nor Redfin values are being populated.
+
+I need you to debug the LIVE RapidAPI requests end-to-end using ONE real property.
+
+Do not bulk process.
+Do not change CivilView.
+Do not fake values.
+Do not tell me it works unless you receive a real property value from RapidAPI.
+
+==================================================
+1. VERIFY ENVIRONMENT VARIABLES
+==================================================
+
+Check whether these exist:
+
+ZILLOW_RAPIDAPI_KEY
+ZILLOW_RAPIDAPI_HOST
+REDFIN_RAPIDAPI_KEY
+REDFIN_RAPIDAPI_HOST
+
+ONLY return true/false.
+
+NEVER print the secret values.
+
+Expected Redfin host:
+
+redfin-com-data.p.rapidapi.com
+
+Print:
+
+{
+  zillowKey: true,
+  zillowHost: true,
+  redfinKey: true,
+  redfinHost: true
+}
+
+If any are false, STOP and tell me which secret is missing.
+
+==================================================
+2. PICK ONE REAL FORECLOSURE
+==================================================
+
+Select ONE real CivilView foreclosure already stored in the database where:
+
+upsetAmount != null
+AND
+upsetAmount <= 280000
+
+Print:
+
+Sheriff #
+Address
+Upset Amount
+
+Use this same property for BOTH Zillow and Redfin tests.
+
+==================================================
+3. TEST REDFIN DIRECTLY
+==================================================
+
+Use:
+
+https://redfin-com-data.p.rapidapi.com
+
+Headers:
+
+X-RapidAPI-Key: process.env.REDFIN_RAPIDAPI_KEY
+X-RapidAPI-Host: process.env.REDFIN_RAPIDAPI_HOST
+
+DO NOT use Search rent.
+
+Inspect the existing Redfin.com Data API integration.
+
+The API provides property-search and property-detail endpoints.
+
+Flow must be:
+
+full CivilView address
+→ Property search / Search / Search v2
+→ match exact property
+→ obtain property identifier or Redfin URL
+→ Property details / Property v2
+→ inspect returned JSON
+
+For EACH request print:
+
+endpoint path
+HTTP status
+response content-type
+top-level JSON keys
+
+Do not print the API key.
+
+For the search response print:
+
+number of matches
+first matched address
+property ID
+Redfin URL
+
+Then call property details.
+
+Look specifically for values whose JSON field names contain things like:
+
+estimate
+estimatedValue
+redfinEstimate
+avm
+homeValue
+valueEstimate
+
+DO NOT automatically use "price".
+
+A field called:
+
+price
+listPrice
+soldPrice
+
+is NOT automatically a Redfin Estimate.
+
+Print:
+
+REDFIN TEST
+HTTP status: ...
+Matched: true/false
+Matched address: ...
+Property ID: ...
+Redfin URL: ...
+Potential valuation fields found:
+- path: ...
+  value: ...
+
+If HTTP status is not 200, print the SAFE error response.
+
+Especially distinguish:
+
+401 = authentication
+403 = authorization/subscription
+404 = endpoint/property problem
+429 = quota/rate limit
+5xx = provider failure
+
+==================================================
+4. TEST ZILLOW DIRECTLY
+==================================================
+
+Now test Zillow separately.
+
+Headers:
+
+X-RapidAPI-Key: process.env.ZILLOW_RAPIDAPI_KEY
+X-RapidAPI-Host: process.env.ZILLOW_RAPIDAPI_HOST
+
+Inspect the actual private-zillow integration.
+
+Do not assume /buyrl accepts an address.
+
+If /buyrl only accepts a Zillow URL, it cannot be the first step.
+
+Determine from the project/API documentation whether there is an endpoint for:
+
+address search
+autocomplete
+property search
+ZPID lookup
+
+If there is:
+
+CivilView address
+→ property search
+→ ZPID / Zillow URL
+→ property details
+→ Zestimate
+
+If this particular private-zillow API has NO address/ZPID search endpoint, say so clearly.
+
+For every request print:
+
+endpoint path
+HTTP status
+response content-type
+top-level JSON keys
+
+Search returned JSON recursively for possible Zestimate fields:
+
+zestimate
+zestimateAmount
+zestimate.value
+estimatedValue
+homeValue
+
+DO NOT use:
+
+price
+listPrice
+taxAssessment
+lastSoldPrice
+rentZestimate
+upsetAmount
+
+as the Zestimate.
+
+Print:
+
+ZILLOW TEST
+HTTP status: ...
+Matched: true/false
+ZPID: ...
+Zillow URL: ...
+Potential Zestimate fields:
+- path: ...
+  value: ...
+
+==================================================
+5. SAVE REAL VALUES
+==================================================
+
+ONLY when a legitimate value is found:
+
+redfinEstimate = actual Redfin estimate
+zillowEstimate = actual Zillow Zestimate
+
+Never set missing values to 0.
+
+Missing must be null.
+
+Then set statuses:
+
+SUCCESS
+NOT_FOUND
+AUTH_ERROR
+SUBSCRIPTION_ERROR
+RATE_LIMITED
+PROVIDER_ERROR
+NOT_SUPPORTED
+
+==================================================
+6. CALCULATE MARKET VALUE
+==================================================
+
+If both exist:
+
+marketValueUsed =
+Math.min(zillowEstimate, redfinEstimate)
+
+marketValueSource =
+"CONSERVATIVE_ZILLOW_REDFIN"
+
+If only Zillow:
+
+marketValueUsed = zillowEstimate
+marketValueSource = "ZILLOW"
+
+If only Redfin:
+
+marketValueUsed = redfinEstimate
+marketValueSource = "REDFIN"
+
+If neither:
+
+marketValueUsed = null
+
+==================================================
+7. CALCULATE DEAL FIELDS
+==================================================
+
+If marketValueUsed and upsetAmount exist:
+
+spread =
+marketValueUsed - upsetAmount
+
+discountPercent =
+(spread / marketValueUsed) * 100
+
+Then recalculate dealScore and dealRating.
+
+==================================================
+8. CREATE DEBUG ENDPOINT
+==================================================
+
+Create:
+
+GET /api/debug/valuations
+
+Protect it with REFRESH_SECRET.
+
+Return:
+
+{
+  "zillow": {
+    "configured": true,
+    "lastHttpStatus": 200,
+    "lastEndpoint": "...",
+    "lastPropertyMatched": true,
+    "lastStatus": "SUCCESS",
+    "lastError": null
+  },
+
+  "redfin": {
+    "configured": true,
+    "lastHttpStatus": 200,
+    "lastEndpoint": "...",
+    "lastPropertyMatched": true,
+    "lastStatus": "SUCCESS",
+    "lastError": null
+  }
+}
+
+Do not include secret keys.
+
+==================================================
+9. DO NOT BULK PROCESS YET
+==================================================
+
+Stop after the ONE-property test.
+
+Give me:
+
+PROPERTY
+Sheriff #:
+Address:
+Upset:
+
+ZILLOW
+HTTP status:
+Endpoint:
+Matched:
+ZPID:
+Zestimate field:
+Zestimate:
+Error:
+
+REDFIN
+HTTP status:
+Search endpoint:
+Details endpoint:
+Matched:
+Property ID:
+Estimate field:
+Estimate:
+Error:
+
+CALCULATED
+Market Value:
+Spread:
+Discount:
+Score:
+Rating:
+
+If either provider fails, give the REAL HTTP status and REAL provider response
+reason.
+
+Do not say "not configured" unless the env variable is actually missing.
+Do not say "working" based on unit tests.
