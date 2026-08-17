@@ -57,8 +57,13 @@ router.post("/admin/login", async (req, res): Promise<void> => {
   res.cookie(COOKIE_NAME, token, {
     signed: true,
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
+    // Replit preview runs inside a cross-site iframe (replit.com embeds the
+    // app's *.replit.dev domain). SameSite=Lax cookies are blocked by all
+    // modern browsers in that context. SameSite=None + Secure is required.
+    // Both Replit dev (mTLS proxy) and Cloudflare production use HTTPS, so
+    // Secure=true is always safe here.
+    secure: true,
+    sameSite: "none",
     maxAge: COOKIE_MAX_AGE,
   });
 
@@ -73,7 +78,7 @@ router.post("/admin/logout", async (req, res): Promise<void> => {
   if (token && typeof token === "string") {
     destroySession(token);
   }
-  res.clearCookie(COOKIE_NAME);
+  res.clearCookie(COOKIE_NAME, { secure: true, sameSite: "none" });
   res.json({ success: true });
 });
 
