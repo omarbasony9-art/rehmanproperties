@@ -1,0 +1,107 @@
+I have subscribed to the RapidAPI product:
+
+Redfin.com Data
+
+Host:
+
+redfin-com-data.p.rapidapi.com
+
+I have added these Replit Secrets:
+
+REDFIN_RAPIDAPI_KEY
+REDFIN_RAPIDAPI_HOST
+
+Do not print or expose either secret.
+
+DO NOT use the "Search rent" endpoint.
+
+Inspect this API's available endpoints:
+
+Autocomplete
+Search
+Search v2
+Search by URL
+Property details
+Property (version 2)
+
+I need to start from a CivilView foreclosure address and obtain the matching Redfin property record.
+
+Flow:
+
+CivilView address
+→ Redfin search/autocomplete
+→ matching property ID/URL
+→ Redfin Property details or Property v2
+→ Redfin Estimate / estimated home value if actually present
+
+TEST ONE PROPERTY ONLY FIRST.
+
+Use one real foreclosure in the database with:
+
+upsetAmount <= 280000
+
+For that property:
+
+1. Search Redfin by the complete address.
+2. Verify the returned address matches the CivilView address.
+3. Retrieve property details.
+4. Inspect the response for an actual Redfin Estimate / estimated home value field.
+
+Do not guess which field is the Redfin Estimate.
+
+Do not use:
+- listing price
+- tax assessment
+- last sale price
+- rent estimate
+- upset amount
+
+as the Redfin Estimate.
+
+Return:
+
+Sheriff #
+CivilView address
+Redfin matched address
+Search endpoint used
+Property details endpoint used
+HTTP statuses
+Redfin property ID if available
+Redfin URL if available
+Exact JSON field containing estimated value
+Redfin Estimate
+Upset Amount
+
+If an actual Redfin estimated-value field exists, save:
+
+redfinEstimate
+redfinStatus = SUCCESS
+redfinFetchedAt
+
+Then recalculate:
+
+marketValueUsed
+estimatedSpread
+discountPercent
+equityMultiple
+dealScore
+dealRating
+dealWarnings
+
+If Zillow and Redfin both exist:
+
+marketValueUsed = Math.min(zillowEstimate, redfinEstimate)
+
+If only Redfin exists:
+
+marketValueUsed = redfinEstimate
+
+If only Zillow exists:
+
+marketValueUsed = zillowEstimate
+
+Never convert missing estimates to 0.
+
+Do not bulk-process all properties until you prove the single-property test returns a legitimate Redfin estimated value.
+
+Tell me the exact response field used.

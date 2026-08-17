@@ -14,7 +14,7 @@
 
 import { query } from "./db.js";
 import { fetchZillowEstimate } from "./services/valuation/zillow.js";
-import { buildRedfinSearchUrl } from "./services/valuation/redfin.js";
+import { fetchRedfinEstimate, buildRedfinSearchUrl } from "./services/valuation/redfin.js";
 import { calculateMarketValue } from "./services/valuation/market-value.js";
 import { scoreDeal, computeWarnings } from "./deals.js";
 
@@ -111,25 +111,143 @@ export async function lookupValuation(
 }
 
 /**
- * Run bulk Zillow refresh for all qualifying properties.
- * upsetAmount <= UPSET_THRESHOLD only (unless force includes all).
+ * Fetch Redfin estimate and recalculate deal for a single property.
+ * Respects 7-day cache unless force=true.
+ *
+ * @returns "fetched" | "cached" | "skipped" | "error"
  */
-export async function runBulkZillowRefresh(force = false): Promise<{
+export async function lookupRedfinValuation(
+  sheriffNumber: string,
+  address: string,
+  city: string,
+  state: string,
+  zip: string,
+  force = false,
+): Promise<"fetched" | "cached" | "skipped" | "error"> {
+  const apiKey = process.env["REDFIN_RAPIDAPI_KEY"];
+  if (!apiKey) {
+    await query(
+      `UPDATE foreclosures SET redfin_status='NOT_CONFIGURED', last_updated=NOW()
+       WHERE sheriff_number=$1`,
+      [sheriffNumber],
+    );
+    return "skipped";
+  }
+
+  if (!force) {
+    const cached = await query<{ redfin_fetched_at: Date | null; redfin_status: string | null }>(
+      `SELECT redfin_fetched_at, redfin_status FROM foreclosures WHERE sheriff_number=$1`,
+      [sheriffNumber],
+    );
+    const row = cached[0];
+    if (row?.redfin_fetched_at && row.redfin_status === "SUCCESS") {
+      const ageDays = (Date.now() - row.redfin_fetched_at.getTime()) / 86_400_000;
+      if (ageDays < 7) return "cached";
+    }
+  }
+
+  try {
+    const result = await fetchRedfinEstimate(address, city, state, zip);
+
+    await query(
+      `UPDATE foreclosures SET
+         redfin_estimate=$2, redfin_fetched_at=$3, redfin_status=$4,
+         redfin_property_url=COALESCE($5, redfin_property_url),
+         last_updated=NOW()
+       WHERE sheriff_number=$1`,
+      [sheriffNumber, result.estimate, result.fetchedAt, result.status, result.propertyUrl],
+    );
+
+    await recalculateDeal(sheriffNumber);
+    return result.status === "SUCCESS" ? "fetched" : "skipped";
+  } catch (err) {
+    console.error(`[valuation] lookupRedfinValuation error for ${sheriffNumber}:`, err);
+    await query(
+      `UPDATE foreclosures SET redfin_status='ERROR', last_updated=NOW() WHERE sheriff_number=$1`,
+      [sheriffNumber],
+    );
+    return "error";
+  }
+}
+
+/**
+ * Run bulk Redfin refresh for all qualifying properties.
+ */
+export async function runBulkRedfinRefresh(force = false, noThreshold = false): Promise<{
   total: number; fetched: number; cached: number; skipped: number; errors: number;
 }> {
   const rows = await query<PropRow>(
-    `SELECT sheriff_number, address, city, state, zip_code, upset_amount,
-            priors_liens_taxes, occupancy_status,
-            zillow_estimate, zillow_fetched_at, zillow_status,
-            redfin_estimate, redfin_fetched_at, redfin_status
-     FROM foreclosures
-     WHERE is_removed = FALSE
-       AND upset_amount IS NOT NULL
-       AND upset_amount <= $1
-       AND address IS NOT NULL
-       AND city IS NOT NULL
-     ORDER BY upset_amount ASC`,
-    [UPSET_THRESHOLD],
+    noThreshold
+      ? `SELECT sheriff_number, address, city, state, zip_code, upset_amount,
+                priors_liens_taxes, occupancy_status,
+                zillow_estimate, zillow_fetched_at, zillow_status,
+                redfin_estimate, redfin_fetched_at, redfin_status
+         FROM foreclosures
+         WHERE is_removed = FALSE
+           AND address IS NOT NULL
+           AND city IS NOT NULL
+         ORDER BY upset_amount ASC NULLS LAST`
+      : `SELECT sheriff_number, address, city, state, zip_code, upset_amount,
+                priors_liens_taxes, occupancy_status,
+                zillow_estimate, zillow_fetched_at, zillow_status,
+                redfin_estimate, redfin_fetched_at, redfin_status
+         FROM foreclosures
+         WHERE is_removed = FALSE
+           AND upset_amount IS NOT NULL
+           AND upset_amount <= $1
+           AND address IS NOT NULL
+           AND city IS NOT NULL
+         ORDER BY upset_amount ASC`,
+    noThreshold ? [] : [UPSET_THRESHOLD],
+  );
+
+  const stats = { total: rows.length, fetched: 0, cached: 0, skipped: 0, errors: 0 };
+
+  for (const prop of rows) {
+    if (!prop.address || !prop.city || !prop.state || !prop.zip_code) { stats.skipped++; continue; }
+    const outcome = await lookupRedfinValuation(
+      prop.sheriff_number, prop.address, prop.city, prop.state, prop.zip_code, force,
+    );
+    if (outcome === "fetched")       stats.fetched++;
+    else if (outcome === "cached")   stats.cached++;
+    else if (outcome === "error")    stats.errors++;
+    else                             stats.skipped++;
+    await sleep(500); // slightly longer delay for Redfin rate limits
+  }
+
+  return stats;
+}
+
+/**
+ * Run bulk Zillow refresh for all qualifying properties.
+ * upsetAmount <= UPSET_THRESHOLD only (unless force includes all).
+ */
+export async function runBulkZillowRefresh(force = false, noThreshold = false): Promise<{
+  total: number; fetched: number; cached: number; skipped: number; errors: number;
+}> {
+  const rows = await query<PropRow>(
+    noThreshold
+      ? `SELECT sheriff_number, address, city, state, zip_code, upset_amount,
+                priors_liens_taxes, occupancy_status,
+                zillow_estimate, zillow_fetched_at, zillow_status,
+                redfin_estimate, redfin_fetched_at, redfin_status
+         FROM foreclosures
+         WHERE is_removed = FALSE
+           AND address IS NOT NULL
+           AND city IS NOT NULL
+         ORDER BY upset_amount ASC NULLS LAST`
+      : `SELECT sheriff_number, address, city, state, zip_code, upset_amount,
+                priors_liens_taxes, occupancy_status,
+                zillow_estimate, zillow_fetched_at, zillow_status,
+                redfin_estimate, redfin_fetched_at, redfin_status
+         FROM foreclosures
+         WHERE is_removed = FALSE
+           AND upset_amount IS NOT NULL
+           AND upset_amount <= $1
+           AND address IS NOT NULL
+           AND city IS NOT NULL
+         ORDER BY upset_amount ASC`,
+    noThreshold ? [] : [UPSET_THRESHOLD],
   );
 
   const stats = { total: rows.length, fetched: 0, cached: 0, skipped: 0, errors: 0 };

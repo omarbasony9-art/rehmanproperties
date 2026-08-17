@@ -19,7 +19,7 @@
 
 import { Router, type Request, type Response } from "express";
 import { query } from "../db.js";
-import { lookupValuation, recalculateDeal, runBulkZillowRefresh } from "../valuation.js";
+import { lookupValuation, lookupRedfinValuation, recalculateDeal, runBulkZillowRefresh, runBulkRedfinRefresh } from "../valuation.js";
 
 export const valuationsRouter = Router();
 
@@ -143,6 +143,77 @@ valuationsRouter.patch(
   },
 );
 
+// ── Single property: Redfin (automated) ──────────────────────────────────────
+
+valuationsRouter.post(
+  "/foreclosures/:sheriffNumber/valuation/redfin-auto",
+  async (req: Request, res: Response): Promise<void> => {
+    const sheriffNumber = String(req.params["sheriffNumber"]).toUpperCase();
+    const force         = req.query["force"] === "true";
+
+    const rows = await query<{
+      sheriff_number: string;
+      address: string | null;
+      city: string | null;
+      state: string | null;
+      zip_code: string | null;
+    }>(
+      `SELECT sheriff_number, address, city, state, zip_code FROM foreclosures WHERE sheriff_number=$1`,
+      [sheriffNumber],
+    );
+
+    if (!rows.length) { res.status(404).json({ error: "Foreclosure not found" }); return; }
+    const prop = rows[0]!;
+    if (!prop.address || !prop.city || !prop.state || !prop.zip_code) {
+      res.status(422).json({ error: "Property has incomplete address" }); return;
+    }
+
+    try {
+      const outcome = await lookupRedfinValuation(
+        sheriffNumber, prop.address, prop.city, prop.state, prop.zip_code, force,
+      );
+      const updated = await query(
+        `SELECT redfin_estimate, redfin_status, redfin_fetched_at, redfin_property_url,
+                zillow_estimate, zillow_status,
+                market_value_used, market_value_source,
+                estimated_spread, discount_percent, equity_multiple,
+                deal_rating, deal_score, deal_warnings, valuation_updated_at
+         FROM foreclosures WHERE sheriff_number=$1`,
+        [sheriffNumber],
+      );
+      res.json({ sheriffNumber, outcome, ...updated[0] });
+    } catch (err) {
+      console.error(`[POST /valuation/redfin-auto/${sheriffNumber}]`, err);
+      res.status(500).json({ error: "Redfin valuation request failed" });
+    }
+  },
+);
+
+// ── Bulk Redfin refresh ───────────────────────────────────────────────────────
+
+valuationsRouter.post(
+  "/valuations/redfin-refresh",
+  async (req: Request, res: Response): Promise<void> => {
+    const secret = process.env["REFRESH_SECRET"];
+    if (!secret) { res.status(503).json({ error: "REFRESH_SECRET not configured" }); return; }
+    const auth = req.headers["authorization"] ?? "";
+    if (auth !== `Bearer ${secret}`) { res.status(401).json({ error: "Unauthorized" }); return; }
+    if (!process.env["REDFIN_RAPIDAPI_KEY"]) {
+      res.status(503).json({ error: "REDFIN_RAPIDAPI_KEY not configured" }); return;
+    }
+
+    const force       = req.query["force"]       === "true";
+    const noThreshold = req.query["noThreshold"] === "true";
+    res.json({ status: "redfin_refresh_started", force, noThreshold });
+
+    runBulkRedfinRefresh(force, noThreshold).then((stats) => {
+      console.log("[valuations/redfin-refresh] Done:", stats);
+    }).catch((err) => {
+      console.error("[valuations/redfin-refresh] Error:", err);
+    });
+  },
+);
+
 // ── Recalculate deal (from stored values) ────────────────────────────────────
 
 valuationsRouter.post(
@@ -197,10 +268,11 @@ valuationsRouter.post(
       return;
     }
 
-    const force = req.query["force"] === "true";
-    res.json({ status: "valuation_refresh_started", force });
+    const force       = req.query["force"]       === "true";
+    const noThreshold = req.query["noThreshold"] === "true";
+    res.json({ status: "valuation_refresh_started", force, noThreshold });
 
-    runBulkZillowRefresh(force).then((stats) => {
+    runBulkZillowRefresh(force, noThreshold).then((stats) => {
       console.log("[valuations/refresh] Done:", stats);
     }).catch((err) => {
       console.error("[valuations/refresh] Error:", err);
