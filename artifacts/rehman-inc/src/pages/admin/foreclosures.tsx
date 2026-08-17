@@ -20,6 +20,7 @@ import {
 import {
   Loader2, RefreshCw, MapPin, ExternalLink as ExternalLinkIcon, AlertTriangle,
   ChevronLeft, ChevronRight, Sparkles, RotateCcw,
+  ChevronUp, ChevronDown, ChevronsUpDown,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { adminFetch } from "@/lib/admin-api";
@@ -408,6 +409,8 @@ export default function AdminForeclosures() {
   const queryClient = useQueryClient();
   const [tab, setTab]     = useState<TabId>("all");
   const [page, setPage]   = useState(1);
+  const [sortBy,  setSortBy]  = useState<string>("upset");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [selected, setSelected] = useState<Listing | null>(null);
   const [redfinTarget, setRedfinTarget] = useState<Listing | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -421,10 +424,14 @@ export default function AdminForeclosures() {
   });
 
   const activeTab = TABS.find((t) => t.id === tab) ?? TABS[0]!;
-  const params = new URLSearchParams({ page: String(page), limit: String(LIMIT), ...activeTab.params });
+  const params = new URLSearchParams({
+    page: String(page), limit: String(LIMIT),
+    sortBy, sortDir,
+    ...activeTab.params,
+  });
 
   const listQ = useQuery<ListResponse>({
-    queryKey: ["fc-listings", tab, page],
+    queryKey: ["fc-listings", tab, page, sortBy, sortDir],
     queryFn: () => fetch(`${BASE}/foreclosures?${params}`).then((r) => r.json()),
   });
 
@@ -433,6 +440,32 @@ export default function AdminForeclosures() {
   const health     = healthQ.data;
 
   const handleTabChange = (id: TabId) => { setTab(id); setPage(1); };
+
+  const handleSort = (col: string) => {
+    if (col === sortBy) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortBy(col);
+      setSortDir("asc");
+    }
+    setPage(1);
+  };
+
+  function SortTh({ col, label, className }: { col: string; label: string; className?: string }) {
+    const active = sortBy === col;
+    const Icon = active ? (sortDir === "asc" ? ChevronUp : ChevronDown) : ChevronsUpDown;
+    return (
+      <th
+        className={`px-3 py-3 text-left whitespace-nowrap cursor-pointer select-none hover:text-foreground transition-colors ${active ? "text-foreground" : ""} ${className ?? ""}`}
+        onClick={() => handleSort(col)}
+      >
+        <span className="inline-flex items-center gap-1">
+          {label}
+          <Icon className={`w-3 h-3 ${active ? "opacity-100" : "opacity-40"}`} />
+        </span>
+      </th>
+    );
+  }
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -574,10 +607,19 @@ export default function AdminForeclosures() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b bg-muted/50 text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                    {["Deal", "Score", "Sheriff #", "Sale Date", "Address", "Type",
-                      "Upset", "Zillow", "Redfin", "Market Value", "Spread", "Disc %", "Warnings"].map((h) => (
-                      <th key={h} className="px-3 py-3 text-left whitespace-nowrap">{h}</th>
-                    ))}
+                    <th className="px-3 py-3 text-left whitespace-nowrap">Deal</th>
+                    <SortTh col="score"    label="Score" />
+                    <SortTh col="sheriff"  label="Sheriff #" />
+                    <SortTh col="date"     label="Sale Date" />
+                    <th className="px-3 py-3 text-left whitespace-nowrap">Address</th>
+                    <th className="px-3 py-3 text-left whitespace-nowrap">Type</th>
+                    <SortTh col="upset"    label="Upset" />
+                    <th className="px-3 py-3 text-left whitespace-nowrap">Zillow</th>
+                    <th className="px-3 py-3 text-left whitespace-nowrap">Redfin</th>
+                    <SortTh col="market"   label="Market Value" />
+                    <SortTh col="spread"   label="Spread" />
+                    <SortTh col="discount" label="Disc %" />
+                    <th className="px-3 py-3 text-left whitespace-nowrap">Warnings</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">

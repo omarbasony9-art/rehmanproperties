@@ -4,8 +4,24 @@ import { query } from "../db.js";
 export const foreclosuresRouter = Router();
 
 /**
+ * Safe whitelist mapping frontend sort keys → actual DB column names.
+ * Only columns listed here can be used as sort keys.
+ */
+const SORT_COLS: Record<string, string> = {
+  upset:    "upset_amount",
+  score:    "deal_score",
+  date:     "current_sale_date",
+  market:   "market_value_used",
+  spread:   "estimated_spread",
+  discount: "discount_percent",
+  sheriff:  "sheriff_number",
+  address:  "address",
+};
+
+/**
  * GET /api/foreclosures
- * Query params: maxUpset, type, rating, missingUpset, unknownValuation, page, limit
+ * Query params: maxUpset, type, rating, missingUpset, unknownValuation, page, limit,
+ *               sortBy (key from SORT_COLS, default "upset"), sortDir ("asc"|"desc", default "asc")
  * Response: { total, count, page, limit, items: Listing[] }
  */
 foreclosuresRouter.get("/", async (req, res) => {
@@ -18,6 +34,12 @@ foreclosuresRouter.get("/", async (req, res) => {
     const page      = Math.max(1, parseInt(String(req.query["page"]  ?? "1")));
     const pageLimit = Math.min(200, Math.max(1, parseInt(String(req.query["limit"] ?? "50"))));
     const offset    = (page - 1) * pageLimit;
+
+    // Sort — default: upset_amount ASC
+    const sortKey = String(req.query["sortBy"] ?? "upset");
+    const sortCol = SORT_COLS[sortKey] ?? "upset_amount";
+    const sortDir = String(req.query["sortDir"] ?? "asc").toLowerCase() === "desc" ? "DESC" : "ASC";
+    const orderBy = `${sortCol} ${sortDir} NULLS LAST`;
 
     const conditions: string[] = [
       "is_removed = FALSE",
@@ -42,7 +64,7 @@ foreclosuresRouter.get("/", async (req, res) => {
 
     const rows = await query(
       `SELECT * FROM foreclosures ${where}
-       ORDER BY deal_score DESC NULLS LAST, current_sale_date ASC
+       ORDER BY ${orderBy}
        LIMIT $${pi++} OFFSET $${pi++}`,
       [...params, pageLimit, offset],
     );
