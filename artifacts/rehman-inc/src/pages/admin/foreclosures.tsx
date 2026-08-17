@@ -252,6 +252,14 @@ export default function AdminForeclosures() {
     queryFn: () => fetch(`${BASE}/foreclosures?${params}`).then((r) => r.json()),
   });
 
+  // Normalize: API returns { total, page, limit, items: [...] }
+  // Guard against missing/malformed items so the page never crashes.
+  const listings: Listing[] = Array.isArray(listQ.data?.items)
+    ? listQ.data.items
+    : Array.isArray(listQ.data)
+      ? (listQ.data as unknown as Listing[])
+      : [];
+
   const totalPages = Math.ceil((listQ.data?.total ?? 0) / LIMIT);
 
   const handleRefresh = async () => {
@@ -337,7 +345,12 @@ export default function AdminForeclosures() {
             <div className="flex items-center justify-center h-40">
               <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
             </div>
-          ) : listQ.data?.items.length === 0 ? (
+          ) : listQ.isError ? (
+            <div className="flex flex-col items-center justify-center h-40 text-muted-foreground gap-2">
+              <p className="text-sm font-medium text-destructive">Unable to load listings.</p>
+              <p className="text-xs">Check that the Foreclosure Tracker service is running.</p>
+            </div>
+          ) : listings.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-40 text-muted-foreground gap-2">
               <p className="text-sm">No listings found.</p>
               <p className="text-xs">Click "Refresh CivilView" to import data.</p>
@@ -356,7 +369,7 @@ export default function AdminForeclosures() {
                   </tr>
                 </thead>
                 <tbody className="divide-y">
-                  {listQ.data?.items.map((item) => {
+                  {listings.map((item) => {
                     const addr = [item.streetAddress, item.city].filter(Boolean).join(", ");
                     return (
                       <tr

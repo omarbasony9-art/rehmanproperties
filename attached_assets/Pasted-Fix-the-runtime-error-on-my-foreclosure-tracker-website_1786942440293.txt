@@ -1,0 +1,113 @@
+Fix the runtime error on my foreclosure tracker website:
+
+undefined is not an object
+(evaluating 'listQ.data?.items.length')
+
+Do NOT redesign the website.
+Do NOT remove any scraper, foreclosure classification, RentCast integration, database, or API functionality.
+
+First inspect the frontend code and determine exactly what `listQ` is querying.
+
+Then inspect the actual API response returned by that endpoint.
+
+The frontend and backend response shapes currently appear to be mismatched.
+
+Find all code using patterns such as:
+
+listQ.data?.items.length
+listQ.data.items
+data.items
+.items.length
+
+Fix them safely.
+
+IMPORTANT:
+
+Do not simply hide the error.
+
+Normalize the API response so the UI consistently receives an array of foreclosure records.
+
+If the API returns:
+
+[
+  {...},
+  {...}
+]
+
+then the frontend should use the returned array directly.
+
+If the API returns:
+
+{
+  items: [...]
+}
+
+then use items.
+
+If the API returns:
+
+{
+  foreclosures: [...]
+}
+
+then use foreclosures.
+
+Create a safe normalization helper similar to:
+
+const listings = Array.isArray(listQ.data)
+  ? listQ.data
+  : Array.isArray(listQ.data?.items)
+    ? listQ.data.items
+    : Array.isArray(listQ.data?.foreclosures)
+      ? listQ.data.foreclosures
+      : [];
+
+Then everywhere in the tracker use:
+
+listings.length
+
+instead of:
+
+listQ.data?.items.length
+
+And map listings using:
+
+listings.map(...)
+
+The page must NEVER crash when:
+- the API is loading
+- the API returns no listings
+- the API returns an error
+- RentCast is unavailable
+- market value is missing
+- the database is empty
+
+Instead show proper states:
+
+Loading...
+No foreclosure listings found.
+Unable to refresh listings.
+
+Also inspect the query/request being used for the foreclosure list.
+
+Test these endpoints if they exist:
+
+GET /api/health
+GET /api/foreclosures
+GET /api/deals
+GET /api/deals/new
+
+Show me the actual JSON returned by each endpoint.
+
+Do not guess what the response shape is.
+
+After fixing it:
+
+1. Run the app.
+2. Open the foreclosure tracker page.
+3. Confirm there are no runtime errors.
+4. Confirm the listing count renders.
+5. Confirm an empty database does not crash the page.
+6. Confirm listings render if records exist.
+7. Run typecheck.
+8. Tell me exactly what caused the error and which files you changed.

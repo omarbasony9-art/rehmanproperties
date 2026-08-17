@@ -10,13 +10,15 @@ export async function adminFetch<T = unknown>(
   // Send the Bearer token from sessionStorage (fallback for when cookies are
   // blocked in the Replit preview iframe or other cross-site contexts).
   const token = sessionStorage.getItem("admin_token");
-  const authHeader = token ? { Authorization: `Bearer ${token}` } : {};
+  const extraHeaders: Record<string, string> = token
+    ? { Authorization: `Bearer ${token}` }
+    : {};
 
   const res = await fetch(`${BASE}${path}`, {
     credentials: "include",
     headers: {
       "Content-Type": "application/json",
-      ...authHeader,
+      ...extraHeaders,
       ...((options.headers ?? {}) as Record<string, string>),
     },
     ...options,
