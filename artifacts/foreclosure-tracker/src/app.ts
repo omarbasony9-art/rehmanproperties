@@ -7,6 +7,7 @@ import { foreclosuresRouter } from "./routes/foreclosures.js";
 import { dealsRouter } from "./routes/deals.js";
 import { healthRouter } from "./routes/health.js";
 import { exportRouter } from "./routes/export.js";
+import { debugRouter } from "./routes/debug.js";
 import { query } from "./db.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -29,6 +30,9 @@ const publicLimiter = rateLimit({
 
 // ── Health ────────────────────────────────────────────────────────────────────
 app.use("/api/health", publicLimiter, healthRouter);
+
+// ── Debug (protected by REFRESH_SECRET) ──────────────────────────────────────
+app.use("/api/debug", debugRouter);
 
 // ── Public foreclosure endpoints ──────────────────────────────────────────────
 app.use("/api/foreclosures", publicLimiter, foreclosuresRouter);

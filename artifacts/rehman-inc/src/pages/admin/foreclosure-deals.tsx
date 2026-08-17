@@ -167,10 +167,10 @@ function DealCard({ deal }: { deal: Deal }) {
 }
 
 const TABS: { value: Rating; label: string }[] = [
-  { value: "all",     label: "All Deals" },
-  { value: "EXTREME", label: "🔥 Extreme" },
-  { value: "MAJOR",   label: "⚡ Major" },
-  { value: "STRONG",  label: "💪 Strong" },
+  { value: "all",     label: "All" },
+  { value: "EXTREME", label: "Extreme" },
+  { value: "MAJOR",   label: "Major" },
+  { value: "STRONG",  label: "Strong" },
   { value: "NORMAL",  label: "Normal" },
 ];
 
@@ -218,7 +218,7 @@ export default function AdminForeclosureDeals() {
         {/* Header */}
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div>
-            <h1 className="text-2xl font-serif font-bold">Hot Deals</h1>
+            <h1 className="text-2xl font-serif font-bold">Watch List</h1>
             <p className="text-sm text-muted-foreground mt-0.5">
               Foreclosure properties ranked by deal score
               {newDeals.length > 0 && (

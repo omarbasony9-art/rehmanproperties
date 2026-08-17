@@ -14,17 +14,24 @@ foreclosuresRouter.get("/", async (req, res) => {
       ? parseFloat(String(req.query["maxMarketValue"]))
       : null;
     const type = req.query["type"] ? String(req.query["type"]) : null;
+    // missingUpset=true → only listings where upset_amount IS NULL (detail fetch failed)
+    const missingUpset = req.query["missingUpset"] === "true";
     const page = Math.max(1, parseInt(String(req.query["page"] ?? "1")));
     const pageLimit = Math.min(200, Math.max(1, parseInt(String(req.query["limit"] ?? "50"))));
     const offset = (page - 1) * pageLimit;
 
-    const conditions: string[] = ["is_removed = FALSE"];
+    const conditions: string[] = ["f.is_removed = FALSE"];
     const params: unknown[] = [];
     let paramIdx = 1;
 
     if (maxUpset != null && !isNaN(maxUpset)) {
-      conditions.push(`upset_amount <= $${paramIdx++}`);
+      // Only filter where we actually have an upset amount — never exclude null as "0"
+      conditions.push(`f.upset_amount IS NOT NULL AND f.upset_amount <= $${paramIdx++}`);
       params.push(maxUpset);
+    }
+
+    if (missingUpset) {
+      conditions.push(`f.upset_amount IS NULL`);
     }
 
     if (maxMarketValue != null && !isNaN(maxMarketValue)) {

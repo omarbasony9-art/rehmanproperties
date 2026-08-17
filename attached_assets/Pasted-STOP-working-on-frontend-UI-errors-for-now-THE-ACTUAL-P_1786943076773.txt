@@ -1,0 +1,471 @@
+STOP working on frontend UI errors for now.
+
+THE ACTUAL PROBLEM IS THAT MY SCRAPER IS RETURNING ZERO LISTINGS.
+
+The Atlantic County CivilView website currently has many active foreclosure
+listings, so zero results is incorrect.
+
+Source:
+
+https://salesweb.civilview.com/Sales/SalesSearch?countyId=25
+
+I need you to debug the SCRAPER AND DATABASE INGESTION end-to-end.
+
+Do not redesign anything.
+
+Do not work on RentCast until the CivilView scraper is successfully importing
+real listings.
+
+==================================================
+STEP 1 — PROVE CIVILVIEW IS ACCESSIBLE
+==================================================
+
+From the Replit SERVER, make a direct HTTP GET request to:
+
+https://salesweb.civilview.com/Sales/SalesSearch?countyId=25
+
+Log:
+
+HTTP status
+response Content-Type
+response body length
+
+The response must contain real Atlantic County listings.
+
+Check specifically whether the HTML contains:
+
+F-26000646
+
+It is currently an active listing.
+
+If it does NOT contain F-26000646, print the first 2000 characters of the
+response so we can see what CivilView actually returned.
+
+Do not continue pretending the scraper works if this check fails.
+
+==================================================
+STEP 2 — PARSE THE ACTUAL TABLE
+==================================================
+
+Inspect the real returned HTML.
+
+Do NOT use guessed CSS selectors.
+
+Find the table containing these headers:
+
+Sheriff #
+Sales Date
+Plaintiff
+Defendant
+Address
+
+Parse ALL open rows.
+
+The current page should return MANY listings, not zero.
+
+For debugging print:
+
+TOTAL TABLE ROWS FOUND: X
+TOTAL LISTINGS PARSED: X
+
+Then print the first 5 records.
+
+I expect to see records similar to:
+
+F-26000646
+9/10/2026
+Joy St. James, Assignee for the 1031 Exchange Specialists, Inc
+Jeffery Solano and Evolve Bank and Trust
+1135 Mays Landing Somers Point Road Egg Harbor Township NJ 08234
+
+Other currently visible sheriff numbers include:
+
+F-25001254
+F-26000696
+F-26000023
+F-26000809
+
+If those are present in the HTML but our parser returns zero, FIX THE SELECTORS.
+
+==================================================
+STEP 3 — CAPTURE THE REAL DETAIL URL
+==================================================
+
+Each listing links to a CivilView detail page that uses a URL similar to:
+
+/Sales/SaleDetails?PropertyId=123456789
+
+DO NOT construct PropertyId from Sheriff #.
+
+Extract the REAL href / PropertyId from the listing HTML.
+
+For every parsed row store:
+
+sheriffNumber
+saleDate
+plaintiff
+defendant
+address
+detailUrl
+propertyId
+
+Resolve relative URLs against:
+
+https://salesweb.civilview.com
+
+==================================================
+VERY IMPORTANT — DO NOT FILTER YET
+==================================================
+
+DO NOT FILTER THE MAIN LIST BY:
+
+Upset Amount
+Judgment Amount
+Market Value
+RentCast
+Deal Rating
+
+at this stage.
+
+THE MAIN CIVILVIEW TABLE DOES NOT CONTAIN UPSET AMOUNT.
+
+First obtain ALL open listings.
+
+This is probably why the current program is producing zero records.
+
+==================================================
+STEP 4 — TEST ONE DETAIL PAGE
+==================================================
+
+Before processing everything, test ONE real listing.
+
+Use:
+
+F-26000646
+
+Open its extracted detail URL.
+
+Print:
+
+Sheriff #
+Court Case #
+Sale Date
+Plaintiff
+Defendant
+Address
+Attorney
+Approx Judgment
+Upset Amount
+Occupancy
+Priors
+Status History
+
+Do not rely only on CSS classes.
+
+CivilView may render these as labels followed by text/elements.
+
+Build parsing that matches labels such as:
+
+Sheriff #:
+Court Case #:
+Sales Date:
+Plaintiff:
+Defendant:
+Address:
+Priors:
+Attorney:
+Approx. Judgment*:
+Upset Amount:
+Property Note:
+
+==================================================
+STEP 5 — MONEY PARSING
+==================================================
+
+Money parser must handle values like:
+
+$223,976.08
+$443,768.96
+$84,773.24
+
+and convert them to:
+
+223976.08
+443768.96
+84773.24
+
+Use something equivalent to:
+
+function parseMoney(value) {
+  if (!value) return null;
+
+  const cleaned = String(value)
+    .replace(/[$,]/g, "")
+    .trim();
+
+  const number = Number.parseFloat(cleaned);
+
+  return Number.isFinite(number) ? number : null;
+}
+
+DO NOT convert a missing upset amount to zero.
+
+Missing must be:
+
+null
+
+not:
+
+0
+
+Otherwise the app could incorrectly classify an unknown property as being
+under $280,000.
+
+==================================================
+STEP 6 — PROCESS ALL LISTINGS
+==================================================
+
+After the single-listing test succeeds:
+
+Fetch every listing detail page.
+
+Use maximum concurrency of 3.
+
+Do not hammer CivilView.
+
+For each listing save the base information even if the detail request fails.
+
+For example:
+
+{
+  sheriffNumber,
+  saleDate,
+  plaintiff,
+  defendant,
+  address,
+  detailUrl,
+  upsetAmount: null,
+  detailFetchStatus: "failed"
+}
+
+One failed detail page must NOT prevent the remaining listings from being saved.
+
+==================================================
+STEP 7 — DATABASE
+==================================================
+
+UPSERT every parsed listing into the database.
+
+Unique key:
+
+sheriffNumber + propertyId
+
+Do not erase old records if CivilView temporarily fails.
+
+After refresh print:
+
+CivilView rows found: X
+Base listings parsed: X
+Detail pages successful: X
+Detail pages failed: X
+Database inserts: X
+Database updates: X
+Total active listings in database: X
+
+I do NOT want vague logs saying "refresh successful".
+
+I want the actual numbers.
+
+==================================================
+STEP 8 — DO NOT REQUIRE RENTCAST
+==================================================
+
+RentCast MUST be optional.
+
+The app must show CivilView listings even when:
+
+RENTCAST_API_KEY is missing
+
+or:
+
+RentCast fails
+
+or:
+
+there is no estimated market value.
+
+The basic listing should still display.
+
+Example:
+
+marketValue: null
+dealRating: "UNKNOWN"
+
+DO NOT remove the foreclosure from the website.
+
+==================================================
+STEP 9 — FILTER AFTER DETAILS
+==================================================
+
+After all base listings and details have been saved:
+
+GET /api/foreclosures
+
+MUST return ALL active CivilView listings by default.
+
+DO NOT default this endpoint to under $280K.
+
+This:
+
+GET /api/foreclosures
+
+should return everything.
+
+This:
+
+GET /api/foreclosures?maxUpset=280000
+
+should return only properties where:
+
+upsetAmount != null
+AND
+upsetAmount <= 280000
+
+Create another filter:
+
+GET /api/foreclosures?missingUpset=true
+
+so I can inspect listings where the detail parser failed to obtain an upset
+amount.
+
+==================================================
+STEP 10 — MAJOR DEALS
+==================================================
+
+Do not block listing ingestion based on deal detection.
+
+All CivilView listings go into the database.
+
+Then separately calculate deal ratings.
+
+If market value is unavailable:
+
+dealRating = "UNKNOWN"
+
+The listing STILL appears.
+
+If estimated market value exists:
+
+spread =
+estimatedMarketValue - upsetAmount
+
+discountPercent =
+spread / estimatedMarketValue * 100
+
+EXTREME:
+discountPercent >= 40
+AND spread >= 100000
+
+MAJOR:
+discountPercent >= 30
+AND spread >= 75000
+
+STRONG:
+discountPercent >= 20
+AND spread >= 50000
+
+Normal listings should still remain visible under All Listings.
+
+==================================================
+STEP 11 — REFRESH BUTTON
+==================================================
+
+The Refresh button must actually invoke:
+
+POST /api/refresh
+
+using the server-side protected refresh system.
+
+After refresh completes, frontend queries must refetch:
+
+/api/foreclosures
+/api/deals
+/api/health
+
+Show:
+
+"Refresh complete — X listings found, Y updated."
+
+Do NOT just change a timestamp.
+
+==================================================
+STEP 12 — API DEBUG ROUTE
+==================================================
+
+Temporarily create:
+
+GET /api/debug/scraper
+
+Protect it appropriately if needed.
+
+Return something like:
+
+{
+  "civilViewReachable": true,
+  "httpStatus": 200,
+  "htmlBytes": 123456,
+  "containsKnownSheriff": true,
+  "tableRowsFound": 80,
+  "listingsParsed": 80,
+  "detailLinksFound": 80,
+  "databaseActiveCount": 80,
+  "lastRefresh": "...",
+  "lastError": null
+}
+
+Numbers above are examples.
+
+RETURN THE ACTUAL NUMBERS.
+
+==================================================
+STEP 13 — VERIFY WITH REAL DATA
+==================================================
+
+After fixing it:
+
+RUN THE REFRESH.
+
+Then show me the exact output of:
+
+GET /api/debug/scraper
+
+GET /api/health
+
+GET /api/foreclosures
+
+GET /api/foreclosures/F-26000646
+
+DO NOT tell me it is working unless:
+
+1. CivilView returned real rows.
+2. The parser extracted real listings.
+3. Listings were inserted into the database.
+4. GET /api/foreclosures returns at least one REAL CivilView property.
+5. The website displays those real properties.
+
+Also tell me:
+
+- how many CivilView rows were found
+- how many details succeeded
+- how many failed
+- how many database records exist
+- exactly which files you changed
+- any remaining problems
+
+Do not use fake/sample/mock foreclosure records.
+
+Do not return seeded example data.
+
+Do not say "working" based only on tests.
+
+I need REAL CURRENT CIVILVIEW DATA visible in the tracker.

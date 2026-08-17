@@ -1,2 +1,3 @@
 - [Dual-env backend pattern](dual-env-backend.md) — Express+PostgreSQL for Replit dev, Cloudflare D1/R2 for production; both coexist in one monorepo.
 - [Orval zod v3 compat](orval-zod-compat.md) — Orval 8.23+ generates zod.int()/zod.email() which require zod v4; use `type: number` instead of `type: integer` and omit `format: email` in openapi.yaml to stay compatible with zod v3.
+- [CivilView scraper structure](civilview-scraper.md) — Session cookies mandatory; list columns 0-5; detail page uses .sale-detail-label/.sale-detail-value; 3/86 fail (NOT NULL bug), 18/83 miss upset amount.

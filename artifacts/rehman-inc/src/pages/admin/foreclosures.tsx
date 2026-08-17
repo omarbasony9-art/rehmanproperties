@@ -269,7 +269,7 @@ export default function AdminForeclosures() {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {[
               ["Total Listings",  String(health.listingCount)],
-              ["Hot Deals",       String(health.majorDeals)],
+              ["Watch List",      String(health.majorDeals)],
               ["Last Refresh",    fmtDateTime(health.lastRefresh)],
               ["Status",          health.status === "ok" ? "Online" : "Error"],
             ].map(([label, val]) => (

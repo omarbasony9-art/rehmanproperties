@@ -27,7 +27,7 @@ const NAV = [
 
 const FORECLOSURE_NAV = [
   { href: "/admin/foreclosures",       label: "All Listings", icon: List },
-  { href: "/admin/foreclosure-deals",  label: "Hot Deals",    icon: Flame },
+  { href: "/admin/foreclosure-deals",  label: "Watch List",   icon: Flame },
 ];
 
 export function AdminLayout({ children }: { children: React.ReactNode }) {
