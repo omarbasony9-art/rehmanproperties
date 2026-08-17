@@ -9,46 +9,50 @@ export const foreclosuresRouter = Router();
  */
 foreclosuresRouter.get("/", async (req, res) => {
   try {
-    const maxUpset = req.query["maxUpset"] ? parseFloat(String(req.query["maxUpset"])) : null;
-    const maxMarketValue = req.query["maxMarketValue"]
-      ? parseFloat(String(req.query["maxMarketValue"]))
-      : null;
-    const type = req.query["type"] ? String(req.query["type"]) : null;
-    // missingUpset=true → only listings where upset_amount IS NULL (detail fetch failed)
-    const missingUpset = req.query["missingUpset"] === "true";
-    const page = Math.max(1, parseInt(String(req.query["page"] ?? "1")));
-    const pageLimit = Math.min(200, Math.max(1, parseInt(String(req.query["limit"] ?? "50"))));
-    const offset = (page - 1) * pageLimit;
+    const maxUpset      = req.query["maxUpset"]     ? parseFloat(String(req.query["maxUpset"]))     : null;
+    const maxMarketValue= req.query["maxMarketValue"] ? parseFloat(String(req.query["maxMarketValue"])) : null;
+    const type          = req.query["type"]         ? String(req.query["type"])                     : null;
+    const rating        = req.query["rating"]       ? String(req.query["rating"]).toUpperCase()     : null;
+    const missingUpset  = req.query["missingUpset"] === "true";
+    const unknownVal    = req.query["unknownValuation"] === "true"; // deal_rating = UNKNOWN
+    const page          = Math.max(1, parseInt(String(req.query["page"]  ?? "1")));
+    const pageLimit     = Math.min(200, Math.max(1, parseInt(String(req.query["limit"] ?? "50"))));
+    const offset        = (page - 1) * pageLimit;
 
     const conditions: string[] = ["f.is_removed = FALSE"];
     const params: unknown[] = [];
     let paramIdx = 1;
 
     if (maxUpset != null && !isNaN(maxUpset)) {
-      // Only filter where we actually have an upset amount — never exclude null as "0"
       conditions.push(`f.upset_amount IS NOT NULL AND f.upset_amount <= $${paramIdx++}`);
       params.push(maxUpset);
     }
-
     if (missingUpset) {
       conditions.push(`f.upset_amount IS NULL`);
     }
-
     if (maxMarketValue != null && !isNaN(maxMarketValue)) {
       conditions.push(`pv.estimated_market_value <= $${paramIdx++}`);
       params.push(maxMarketValue);
     }
-
     if (type) {
       conditions.push(`f.foreclosure_type = $${paramIdx++}`);
       params.push(type);
+    }
+    if (rating && ["EXTREME","MAJOR","STRONG","NORMAL","UNKNOWN"].includes(rating)) {
+      conditions.push(`f.deal_rating = $${paramIdx++}`);
+      params.push(rating);
+    }
+    if (unknownVal) {
+      conditions.push(`f.deal_rating = 'UNKNOWN'`);
     }
 
     const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
 
     const rows = await query(
-      `SELECT f.*, pv.estimated_market_value, pv.bedrooms, pv.bathrooms,
-              pv.square_feet, pv.year_built, pv.property_type as pv_property_type,
+      `SELECT f.*, pv.estimated_market_value, pv.active_listing_price,
+              pv.last_sale_price, pv.last_sale_date, pv.tax_assessed_value,
+              pv.bedrooms, pv.bathrooms, pv.square_feet, pv.year_built,
+              pv.property_type as pv_property_type,
               pv.fetched_at as valuation_fetched_at
        FROM foreclosures f
        LEFT JOIN property_values pv ON pv.sheriff_number = f.sheriff_number
@@ -163,7 +167,8 @@ function formatForeclosure(row: any): Record<string, unknown> {
     classificationConfidence: row.classification_confidence ?? null,
     classificationEvidence:   row.classification_evidence ?? null,
     dealRating:               row.deal_rating ?? null,
-    dealScore:                row.deal_score             ? parseFloat(row.deal_score)             : 0,
+    dealScore:                row.deal_score             ? parseFloat(row.deal_score)             : null,
+    valuationStatus:          row.valuation_status ?? "UNKNOWN",
     estimatedSpread:          row.estimated_spread       ? parseFloat(row.estimated_spread)       : null,
     discountPercent:          row.discount_percent       ? parseFloat(row.discount_percent)       : null,
     equityMultiple:           row.equity_multiple        ? parseFloat(row.equity_multiple)        : null,

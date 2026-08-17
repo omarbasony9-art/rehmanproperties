@@ -8,6 +8,7 @@ import { dealsRouter } from "./routes/deals.js";
 import { healthRouter } from "./routes/health.js";
 import { exportRouter } from "./routes/export.js";
 import { debugRouter } from "./routes/debug.js";
+import { valuationsRouter } from "./routes/valuations.js";
 import { query } from "./db.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -33,6 +34,11 @@ app.use("/api/health", publicLimiter, healthRouter);
 
 // ── Debug (protected by REFRESH_SECRET) ──────────────────────────────────────
 app.use("/api/debug", debugRouter);
+
+// ── Valuation endpoints ───────────────────────────────────────────────────────
+// POST /api/foreclosures/:sheriffNumber/valuation  — manual single-property
+// POST /api/valuations/refresh                     — bulk (REFRESH_SECRET)
+app.use("/api", valuationsRouter);
 
 // ── Public foreclosure endpoints ──────────────────────────────────────────────
 app.use("/api/foreclosures", publicLimiter, foreclosuresRouter);

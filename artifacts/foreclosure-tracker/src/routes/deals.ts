@@ -5,22 +5,16 @@ export const dealsRouter = Router();
 
 /**
  * GET /api/deals
- * Returns EXTREME, MAJOR, STRONG deals sorted by deal_score DESC.
+ * Returns EXTREME, MAJOR, STRONG deals sorted by dealScore DESC, discountPercent DESC.
  * Query params: rating, minimumDiscount, minimumSpread, maxUpset
  * Response: { items: Deal[], count: number }
  */
 dealsRouter.get("/", async (req, res) => {
   try {
-    const rating = req.query["rating"] ? String(req.query["rating"]).toUpperCase() : null;
-    const minDiscount = req.query["minimumDiscount"]
-      ? parseFloat(String(req.query["minimumDiscount"]))
-      : null;
-    const minSpread = req.query["minimumSpread"]
-      ? parseFloat(String(req.query["minimumSpread"]))
-      : null;
-    const maxUpset = req.query["maxUpset"]
-      ? parseFloat(String(req.query["maxUpset"]))
-      : null;
+    const rating      = req.query["rating"]          ? String(req.query["rating"]).toUpperCase()          : null;
+    const minDiscount = req.query["minimumDiscount"]  ? parseFloat(String(req.query["minimumDiscount"]))  : null;
+    const minSpread   = req.query["minimumSpread"]    ? parseFloat(String(req.query["minimumSpread"]))    : null;
+    const maxUpset    = req.query["maxUpset"]         ? parseFloat(String(req.query["maxUpset"]))         : null;
 
     const conditions: string[] = [
       "f.is_removed = FALSE",
@@ -42,7 +36,7 @@ dealsRouter.get("/", async (req, res) => {
       params.push(minSpread);
     }
     if (maxUpset != null && !isNaN(maxUpset)) {
-      conditions.push(`f.upset_amount <= $${pi++}`);
+      conditions.push(`f.upset_amount IS NOT NULL AND f.upset_amount <= $${pi++}`);
       params.push(maxUpset);
     }
 
@@ -55,7 +49,7 @@ dealsRouter.get("/", async (req, res) => {
        FROM foreclosures f
        LEFT JOIN property_values pv ON pv.sheriff_number = f.sheriff_number
        ${where}
-       ORDER BY f.deal_score DESC NULLS LAST`,
+       ORDER BY f.deal_score DESC NULLS LAST, f.discount_percent DESC NULLS LAST`,
       params,
     );
 
@@ -69,8 +63,7 @@ dealsRouter.get("/", async (req, res) => {
 
 /**
  * GET /api/deals/new
- * Returns major/strong/extreme deals discovered in the past 48 hours.
- * Response: { items: Deal[], count: number }
+ * Returns EXTREME/MAJOR/STRONG deals first seen in the past 48 hours.
  */
 dealsRouter.get("/new", async (req, res) => {
   try {
@@ -83,7 +76,7 @@ dealsRouter.get("/new", async (req, res) => {
        WHERE f.is_removed = FALSE
          AND f.deal_rating IN ('EXTREME','MAJOR','STRONG')
          AND f.first_seen > NOW() - INTERVAL '48 hours'
-       ORDER BY f.deal_score DESC NULLS LAST`,
+       ORDER BY f.deal_score DESC NULLS LAST, f.discount_percent DESC NULLS LAST`,
     );
 
     const items = rows.map(formatDeal);
@@ -97,40 +90,37 @@ dealsRouter.get("/new", async (req, res) => {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function formatDeal(row: any): Record<string, unknown> {
   const firstSeenDate = row.first_seen ? new Date(row.first_seen) : null;
-  const isNew = firstSeenDate
-    ? Date.now() - firstSeenDate.getTime() < 48 * 3_600_000
-    : false;
+  const isNew = firstSeenDate ? Date.now() - firstSeenDate.getTime() < 48 * 3_600_000 : false;
 
   return {
     sheriffNumber:        row.sheriff_number,
     courtCaseNumber:      row.court_case_number,
     currentSaleDate:      row.current_sale_date,
-    // Field names match the frontend Deal interface
     plaintiffName:        row.plaintiff ?? null,
     defendantName:        row.defendant ?? null,
     streetAddress:        row.address ?? null,
     city:                 row.city ?? null,
     state:                row.state ?? null,
     zipCode:              row.zip_code ?? null,
-    upsetAmount:          row.upset_amount        ? parseFloat(row.upset_amount)        : null,
-    approxJudgment:       row.approx_judgment     ? parseFloat(row.approx_judgment)     : null,
+    upsetAmount:          row.upset_amount          ? parseFloat(row.upset_amount)          : null,
+    approxJudgment:       row.approx_judgment       ? parseFloat(row.approx_judgment)       : null,
     estimatedMarketValue: row.estimated_market_value ? parseFloat(row.estimated_market_value) : null,
     foreclosureType:      row.foreclosure_type ?? null,
-    dealRating:           row.deal_rating ?? "NORMAL",
-    dealScore:            row.deal_score          ? parseFloat(row.deal_score)          : 0,
-    estimatedSpread:      row.estimated_spread    ? parseFloat(row.estimated_spread)    : null,
-    discountPercent:      row.discount_percent    ? parseFloat(row.discount_percent)    : null,
-    equityMultiple:       row.equity_multiple     ? parseFloat(row.equity_multiple)     : null,
-    // Consistent field name: `warnings` (was `dealWarnings`)
+    dealRating:           row.deal_rating ?? "UNKNOWN",
+    dealScore:            row.deal_score            ? parseFloat(row.deal_score)            : null,
+    estimatedSpread:      row.estimated_spread      ? parseFloat(row.estimated_spread)      : null,
+    discountPercent:      row.discount_percent      ? parseFloat(row.discount_percent)      : null,
+    equityMultiple:       row.equity_multiple       ? parseFloat(row.equity_multiple)       : null,
     warnings:             Array.isArray(row.deal_warnings) ? row.deal_warnings : [],
     occupancyStatus:      row.occupancy_status ?? null,
     detailUrl:            row.detail_url ?? null,
     googleMapsUrl:        row.google_maps_url ?? null,
     zillowUrl:            row.zillow_url ?? null,
-    bedrooms:             row.bedrooms            ? parseFloat(row.bedrooms)            : null,
-    bathrooms:            row.bathrooms           ? parseFloat(row.bathrooms)           : null,
-    squareFeet:           row.square_feet         ? parseFloat(row.square_feet)         : null,
-    yearBuilt:            row.year_built          ? parseFloat(row.year_built)          : null,
+    bedrooms:             row.bedrooms              ? parseFloat(row.bedrooms)              : null,
+    bathrooms:            row.bathrooms             ? parseFloat(row.bathrooms)             : null,
+    squareFeet:           row.square_feet           ? parseFloat(row.square_feet)           : null,
+    yearBuilt:            row.year_built            ? parseFloat(row.year_built)            : null,
+    valuationStatus:      row.valuation_status ?? "UNKNOWN",
     firstSeen:            row.first_seen ?? null,
     lastChanged:          row.last_changed ?? null,
     isNew,

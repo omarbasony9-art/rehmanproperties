@@ -110,6 +110,26 @@ export async function initDb(): Promise<void> {
     )
   `);
 
+  // Migrations — safe to run on every startup
+  await query(`
+    ALTER TABLE foreclosures
+      ADD COLUMN IF NOT EXISTS valuation_status TEXT DEFAULT 'UNKNOWN'
+  `);
+
+  // Fix: spec requires dealScore=null (not 0) when rating is UNKNOWN
+  await query(`
+    UPDATE foreclosures
+    SET deal_score = NULL
+    WHERE deal_rating = 'UNKNOWN' AND (deal_score = 0 OR deal_score IS NULL)
+  `);
+
+  // Rename old warning value NO_UPSET_AMOUNT → MISSING_UPSET_AMOUNT
+  await query(`
+    UPDATE foreclosures
+    SET deal_warnings = array_replace(deal_warnings, 'NO_UPSET_AMOUNT', 'MISSING_UPSET_AMOUNT')
+    WHERE 'NO_UPSET_AMOUNT' = ANY(deal_warnings)
+  `);
+
   await query(`
     CREATE TABLE IF NOT EXISTS refresh_runs (
       id               SERIAL PRIMARY KEY,

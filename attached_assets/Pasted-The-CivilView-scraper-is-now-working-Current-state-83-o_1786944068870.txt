@@ -1,0 +1,385 @@
+The CivilView scraper is now working.
+
+Current state:
+
+83 of 86 Atlantic County sheriff-sale listings are in the database with:
+- correct sheriff numbers
+- addresses
+- sale dates
+- upset amounts
+- detail data
+
+Do NOT redesign or rewrite the working CivilView scraper.
+
+Now finish the valuation and deal-detection system while keeping API usage and Replit costs as low as possible.
+
+==================================================
+1. INVESTIGATE THE 3 MISSING LISTINGS
+==================================================
+
+Before doing anything else, identify the 3 CivilView listings that did not fully import.
+
+For each one show:
+
+Sheriff #
+Address
+Detail URL
+HTTP status
+Failure reason
+
+Possible reasons:
+- detail page fetch failed
+- missing PropertyId
+- duplicate
+- malformed HTML
+- no sheriff number
+- database constraint
+- parser exception
+
+Do NOT allow one bad record to fail the refresh.
+
+If possible, save all 86 base listings even if detail parsing fails.
+
+==================================================
+2. RENTCAST MUST BE OPTIONAL
+==================================================
+
+Use environment variable:
+
+RENTCAST_API_KEY
+
+If it does not exist:
+
+- CivilView listings must still work
+- All Listings must still work
+- Under $280K must still work
+- foreclosure type must still work
+
+Only market valuation/deal scoring should remain UNKNOWN.
+
+==================================================
+3. KEEP RENTCAST USAGE CHEAP
+==================================================
+
+Do NOT run RentCast against every foreclosure automatically.
+
+Only request valuation when:
+
+upsetAmount is not null
+AND
+upsetAmount <= 280000
+
+unless I manually request valuation for another property.
+
+This is important for saving API calls.
+
+Also do NOT call RentCast again if a valid valuation exists from the past 7 days.
+
+Cache fields:
+
+valuationFetchedAt
+estimatedMarketValue
+activeListingPrice
+lastSalePrice
+lastSaleDate
+taxAssessedValue
+bedrooms
+bathrooms
+squareFeet
+yearBuilt
+propertyType
+
+==================================================
+4. PROPERTY LOOKUP
+==================================================
+
+Normalize addresses before sending to RentCast.
+
+Use the street address + city + NJ + ZIP.
+
+If RentCast cannot identify the exact property:
+
+set:
+
+valuationStatus = "NOT_FOUND"
+
+Do not remove the foreclosure.
+
+If RentCast returns an error:
+
+valuationStatus = "ERROR"
+
+If successful:
+
+valuationStatus = "SUCCESS"
+
+==================================================
+5. DEAL CALCULATIONS
+==================================================
+
+When both:
+
+estimatedMarketValue
+upsetAmount
+
+exist, calculate:
+
+estimatedSpread =
+estimatedMarketValue - upsetAmount
+
+discountPercent =
+((estimatedMarketValue - upsetAmount) / estimatedMarketValue) * 100
+
+equityMultiple =
+estimatedMarketValue / upsetAmount
+
+Round discountPercent to 1 decimal.
+
+==================================================
+6. DEAL RATING
+==================================================
+
+EXTREME:
+
+discountPercent >= 40
+AND
+estimatedSpread >= 100000
+
+MAJOR:
+
+discountPercent >= 30
+AND
+estimatedSpread >= 75000
+
+STRONG:
+
+discountPercent >= 20
+AND
+estimatedSpread >= 50000
+
+NORMAL:
+
+valuation exists but does not qualify above
+
+UNKNOWN:
+
+no reliable valuation exists
+
+Order of evaluation MUST be:
+
+EXTREME
+MAJOR
+STRONG
+NORMAL
+UNKNOWN
+
+==================================================
+7. DEAL SCORE
+==================================================
+
+Calculate 0-100 dealScore.
+
+Use:
+
+Discount percentage:
+maximum 50 points
+
+Dollar spread:
+maximum 30 points
+
+Lower upset amount:
+maximum 10 points
+
+Property data completeness:
+maximum 10 points
+
+Do not make up market data just to generate a score.
+
+If valuation does not exist:
+
+dealScore = null
+dealRating = "UNKNOWN"
+
+==================================================
+8. WARNINGS
+==================================================
+
+Generate dealWarnings:
+
+KNOWN_PRIOR_LIEN
+TAX_LIEN
+MUNICIPAL_LIEN
+HOA_LIEN
+OWNER_OCCUPIED
+UNKNOWN_MARKET_VALUE
+MISSING_UPSET_AMOUNT
+PROPERTY_DATA_MISSING
+
+A warning does NOT automatically remove the property.
+
+==================================================
+9. DEALS ENDPOINT
+==================================================
+
+GET /api/deals
+
+Return only:
+
+EXTREME
+MAJOR
+STRONG
+
+Sort:
+
+dealScore descending
+
+Then discountPercent descending.
+
+Also support:
+
+GET /api/deals?rating=EXTREME
+
+GET /api/deals?maxUpset=200000
+
+GET /api/deals?minimumDiscount=30
+
+GET /api/deals?minimumSpread=75000
+
+==================================================
+10. VALUATION ENDPOINT
+==================================================
+
+Create:
+
+POST /api/foreclosures/:sheriffNumber/valuation
+
+This lets me manually value a specific property.
+
+Also create:
+
+POST /api/valuations/refresh
+
+Protected using REFRESH_SECRET.
+
+By default this endpoint should ONLY value qualifying properties:
+
+upsetAmount <= 280000
+
+Do not revalue properties whose cached valuation is less than 7 days old unless:
+
+?force=true
+
+==================================================
+11. DASHBOARD
+==================================================
+
+All Listings should ALWAYS show CivilView listings.
+
+Tabs:
+
+All Listings
+Under $280K
+Extreme Deals
+Major Deals
+Strong Deals
+Unknown Valuation
+
+All Listings must not depend on RentCast.
+
+Show columns:
+
+Deal Rating
+Sheriff #
+Sale Date
+Address
+Foreclosure Type
+Upset Amount
+Estimated Market Value
+Potential Spread
+Discount %
+Deal Score
+Warnings
+
+For listings without a market value show:
+
+"Not valued yet"
+
+instead of $0.
+
+Add a button on a property:
+
+Get Property Value
+
+This should call the manual valuation endpoint.
+
+==================================================
+12. GOOGLE SHEETS EXPORT
+==================================================
+
+Update:
+
+GET /api/export/google-sheets
+
+Columns:
+
+Sheriff #
+Court Case #
+Sale Date
+Plaintiff
+Defendant
+Address
+Foreclosure Type
+Approx Judgment
+Upset Amount
+Estimated Market Value
+Potential Spread
+Discount %
+Equity Multiple
+Deal Rating
+Deal Score
+Warnings
+Priors/Liens/Taxes
+Attorney
+Occupancy
+Google Maps
+Zillow Search
+CivilView URL
+Valuation Status
+Last Updated
+
+Sort export:
+
+EXTREME
+MAJOR
+STRONG
+NORMAL
+UNKNOWN
+
+then Deal Score descending.
+
+==================================================
+13. VERIFY
+==================================================
+
+After implementation show me:
+
+1. Total CivilView listings
+2. Total DB listings
+3. Number <= $280K upset
+4. Number with valuations
+5. Number EXTREME
+6. Number MAJOR
+7. Number STRONG
+8. Number NORMAL
+9. Number UNKNOWN
+10. Exact reason for the 3 currently missing listings
+
+Do not claim this is working based only on unit tests.
+
+Test it using real stored CivilView properties.
+
+Run:
+- typecheck
+- tests
+
+Tell me exactly which files changed.
