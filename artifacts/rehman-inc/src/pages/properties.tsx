@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Navbar } from "@/components/layout/navbar";
 import { Footer } from "@/components/layout/footer";
 import { MultiStepForm } from "@/components/marketing/multi-step-form";
-import { LightPageHero } from "@/components/layout/page-hero";
+import { EditorialPageHero } from "@/components/layout/page-hero";
 import { Button } from "@/components/ui/button";
 import { Building, Home, Map, TreePine } from "lucide-react";
 import { useSEO } from "@/hooks/use-seo";
@@ -19,12 +19,11 @@ export default function PropertiesPage() {
     <div className="min-h-screen bg-background text-foreground">
       <Navbar onOpenForm={() => setFormOpen(true)} />
       
-      <LightPageHero
+      <EditorialPageHero
         eyebrow="Our Portfolio"
         title="Real Estate We Acquire and Manage."
         description="Explore the types of properties that fit the Rehman INC investment strategy."
-        image={`${import.meta.env.BASE_URL}property-3.jpg`}
-        imageAlt="Investment property"
+        bgImage={`${import.meta.env.BASE_URL}property-3.jpg`}
       />
 
       {/* EMPTY STATE */}
