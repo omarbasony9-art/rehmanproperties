@@ -1,0 +1,420 @@
+# PERMANENT AUTOMATIC UPDATE SYSTEM
+
+I want this admin CMS architecture designed so normal website content continues updating automatically long-term without me needing Replit, GitHub, or a new deployment every time I make a normal content change.
+
+Do NOT create a temporary admin editor that only changes the current browser session.
+
+The admin panel and public website must use the database as the permanent source of truth.
+
+## ONE SOURCE OF TRUTH
+
+Cloudflare D1 should be the central source of truth for editable website content.
+
+For example:
+
+If I change Ali Rehman's phone number ONE TIME in Admin → Contact Information, every place on the public website that displays the company phone number should automatically use the new value.
+
+I should NOT have to separately change:
+
+* Header
+* Footer
+* Contact page
+* Homepage
+* CTA section
+* Sell Your House page
+
+Use shared global settings instead of duplicating the same information in multiple places.
+
+The same principle should apply to:
+
+* Company name
+* Phone
+* Email
+* Instagram
+* Main CTA
+* Logo
+* Social links
+* Navigation
+* Footer information
+* Global branding values where appropriate
+
+---
+
+# ADMIN SAVE → AUTOMATIC PUBLIC UPDATE
+
+Whenever I change something in admin and click Save:
+
+1. Validate the content.
+2. Save it permanently to D1.
+3. Invalidate any cached version of that content.
+4. Public pages should automatically retrieve/use the new value.
+5. The change should appear without rebuilding the website.
+6. The change should remain after browser refresh.
+7. The change should remain after Cloudflare redeployments.
+8. The change should remain after future GitHub code updates.
+
+Normal content changes must NOT require:
+
+`git commit`
+
+`git push`
+
+Cloudflare redeployment
+
+Replit Agent
+
+manual code editing
+
+---
+
+# GLOBAL COMPONENTS MUST UPDATE EVERYWHERE
+
+Build reusable database-backed components.
+
+Examples:
+
+`SiteHeader`
+
+`SiteFooter`
+
+`ContactInformation`
+
+`MainCTA`
+
+`SocialLinks`
+
+`Navigation`
+
+These components should read from the same shared settings.
+
+If I update:
+
+`phone = 609-555-1111`
+
+the entire website should automatically show that number wherever the global phone setting is used.
+
+Do not hardcode duplicate copies throughout different React pages.
+
+---
+
+# PAGE CONTENT
+
+Each page should have a permanent content record identified by a stable key.
+
+Examples:
+
+`home`
+
+`sell-your-house`
+
+`how-it-works`
+
+`why-us`
+
+`properties`
+
+`faq`
+
+`contact`
+
+Each section should also have a stable identifier.
+
+Example:
+
+`home.hero`
+
+`home.how_it_works`
+
+`home.why_us`
+
+`home.situations`
+
+`home.final_cta`
+
+The public website should automatically render the latest saved version from D1.
+
+---
+
+# NEW ADMIN CONTENT
+
+Design the CMS so adding new items does not require code changes when the component already supports that type of content.
+
+For example:
+
+If I add another:
+
+* FAQ
+* How It Works step
+* Situation card
+* Property
+* Testimonial
+* Navigation item
+
+the website should automatically render the new database record.
+
+I should not need Replit to manually add each item.
+
+---
+
+# REORDERING
+
+Store `sort_order` or equivalent in D1 for lists.
+
+If I reorder:
+
+* FAQs
+* Navigation
+* Property cards
+* Homepage cards
+* Process steps
+
+through admin, the public website should automatically display the new order.
+
+---
+
+# ENABLE / DISABLE
+
+Sections and individual items should support:
+
+`published`
+
+or:
+
+`enabled`
+
+If I turn something off in admin, it should automatically disappear publicly.
+
+If I turn it back on, it should automatically return.
+
+No code changes.
+
+---
+
+# IMAGES
+
+Images should also use persistent references.
+
+Do NOT hardcode a hero image directly into a page if I have selected a different image through admin.
+
+Store the selected image reference/URL in D1.
+
+When I replace an image:
+
+1. Save new image reference.
+2. Update D1.
+3. Public website automatically uses the new image.
+4. Old page does not continue displaying a hardcoded image.
+
+Use fallback images if an admin-selected image becomes unavailable.
+
+---
+
+# SAFE DEFAULT CONTENT
+
+The website must never become blank because one D1 record is missing.
+
+Create safe defaults.
+
+Loading logic should generally work like:
+
+1. Try current content from D1.
+2. If valid content exists, use it.
+3. If content is missing because of an error, use the original/default website content.
+
+This provides resilience.
+
+Do NOT overwrite my saved admin changes with defaults during every deployment.
+
+Defaults should only seed missing content.
+
+---
+
+# NEVER RESET ADMIN CHANGES DURING DEPLOYMENT
+
+THIS IS VERY IMPORTANT.
+
+Future:
+
+* Replit changes
+* GitHub pushes
+* Cloudflare deployments
+* frontend builds
+
+must NOT reset my D1 website content.
+
+Do not run a seed process that overwrites existing records.
+
+Use:
+
+`INSERT ... ON CONFLICT DO NOTHING`
+
+or equivalent logic where appropriate for default content.
+
+Existing admin-edited values must win.
+
+---
+
+# AUTOMATIC GITHUB → CLOUDFLARE CODE UPDATES
+
+Keep GitHub connected to Cloudflare.
+
+For actual CODE changes:
+
+Replit → GitHub push → Cloudflare automatically builds and deploys the new version.
+
+I should not have to manually redeploy Cloudflare after normal GitHub pushes.
+
+Content changes are different:
+
+Admin → D1 → website updates automatically without GitHub.
+
+So there should be TWO automatic systems:
+
+### CONTENT
+
+Admin → D1 → Website
+
+No deployment required.
+
+### CODE
+
+Replit → GitHub → Cloudflare automatic deployment
+
+---
+
+# CACHE INVALIDATION
+
+If public content is cached for performance:
+
+When I save content in admin, invalidate or version that specific cached content.
+
+I do NOT want to wait hours to see an admin change.
+
+Changes should normally appear immediately or within seconds after saving.
+
+Do not completely disable caching if a lightweight intelligent cache can keep the site fast.
+
+---
+
+# VERSION / UPDATED TIME
+
+For editable content store:
+
+* created_at
+* updated_at
+
+where appropriate.
+
+This allows the application to know when content changed.
+
+---
+
+# CONTENT API
+
+Prefer efficient endpoints such as:
+
+`GET /api/public/content/home`
+
+rather than dozens of individual API requests.
+
+Global data can use something like:
+
+`GET /api/public/site-config`
+
+This can return:
+
+* company
+* contact
+* navigation
+* footer
+* social links
+
+The homepage endpoint can return all homepage sections in one lightweight response.
+
+Keep the website fast.
+
+---
+
+# FUTURE-PROOF ADMIN
+
+When future pages or sections are added through code, structure them so they can easily register editable fields with the existing CMS.
+
+Do not create another separate admin system for every future page.
+
+Use reusable content schemas/components.
+
+---
+
+# DATABASE BACKUPS / SAFETY
+
+Do not automatically delete old data just because website code changes.
+
+Use safe migrations.
+
+Future migrations should:
+
+* preserve inquiries
+* preserve website content
+* preserve properties
+* preserve FAQs
+* preserve settings
+* preserve admin edits
+
+Never drop and recreate production tables simply to make an update easier.
+
+---
+
+# FAIL SAFELY
+
+If D1 temporarily cannot load content:
+
+* Do not crash the entire public website.
+* Show safe cached/default content where possible.
+* Do not expose database errors to visitors.
+
+If an admin save fails:
+
+* Tell me clearly that it failed.
+* Do not falsely show "Saved".
+* Keep my unsaved text available so I can retry.
+
+---
+
+# IMPORTANT DEFINITION OF AUTOMATIC
+
+By "automatically update forever," I mean:
+
+For normal website content and configuration changes, the system should be designed so I can continue managing the website from Admin without needing a programmer or deployment.
+
+Do not make a false technical promise that no future maintenance will ever be required if browsers, Cloudflare, APIs, or infrastructure change.
+
+Instead, architect the website so ongoing everyday updates are database-driven and require no code changes.
+
+---
+
+# FINAL TEST
+
+Test this exact scenario:
+
+1. Open public homepage.
+2. Log into admin.
+3. Change homepage headline.
+4. Save.
+5. Open public homepage again.
+6. New headline appears without redeployment.
+7. Change phone number.
+8. Confirm every shared location updates.
+9. Change Instagram.
+10. Confirm every shared Instagram link updates.
+11. Change hero image reference.
+12. Confirm homepage image updates.
+13. Reorder homepage items.
+14. Confirm public order updates.
+15. Disable a section.
+16. Confirm it disappears.
+17. Re-enable it.
+18. Confirm it returns.
+19. Run a new Cloudflare deployment.
+20. Confirm ALL admin-edited content remains exactly as saved.
+
+Build this as the permanent operating model for the Rehman INC website.
