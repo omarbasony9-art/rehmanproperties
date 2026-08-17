@@ -725,6 +725,37 @@ function checkRateLimit(ip: string): boolean {
   return true;
 }
 
+// Admin-only photo upload URL (auth-protected)
+app.post("/admin/properties/upload-url", async (c) => {
+  const token = getCookie(c, COOKIE_NAME);
+  if (!(await isAuthed(c as never, token))) return unauthed(c);
+
+  if (!c.env.PHOTOS) return c.json({ error: "Photo storage is not configured." }, 503);
+
+  let body: Record<string, unknown>;
+  try { body = await c.req.json(); } catch { body = {}; }
+
+  const filename = sanitize(body.filename);
+  const mimeType = sanitize(body.mimeType);
+  if (!filename) return c.json({ error: "filename is required." }, 400);
+
+  const allowed = ["image/jpeg", "image/png", "image/webp"];
+  if (!mimeType || !allowed.includes(mimeType)) {
+    return c.json({ error: "Invalid file type. Allowed: JPEG, PNG, WEBP" }, 400);
+  }
+
+  const extMap: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
+  const ext = extMap[mimeType] ?? "jpg";
+  const rand = new Uint8Array(8);
+  crypto.getRandomValues(rand);
+  const randHex = Array.from(rand).map((b) => b.toString(16).padStart(2, "0")).join("");
+  const objectKey = `photos/${Date.now()}-${randHex}.${ext}`;
+
+  const origin = new URL(c.req.url).origin;
+  const uploadUrl = `${origin}/api/r2-upload?key=${encodeURIComponent(objectKey)}`;
+  return c.json({ uploadUrl, objectKey });
+});
+
 app.post("/inquiries/upload-url", async (c) => {
   // Photo uploads are disabled when R2 is not configured
   if (!c.env.PHOTOS) {
