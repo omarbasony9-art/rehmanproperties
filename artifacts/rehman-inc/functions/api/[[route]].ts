@@ -1118,18 +1118,18 @@ app.get("/foreclosures", async (c) => {
 app.get("/foreclosures/listings", async (c) => {
   try {
     await ensureFcSchema(c.env);
-    const q = c.req.query;
-    const county = q("county") ?? undefined;
-    const search = q("search") ?? undefined;
-    const deal = q("deal") ?? undefined;
-    const type = q("type") ?? undefined;
-    const upsetMaxRaw = q("upsetMax");
+    const q = c.req.query();
+    const county = q.county ?? undefined;
+    const search = q.search ?? undefined;
+    const deal = q.deal ?? undefined;
+    const type = q.type ?? undefined;
+    const upsetMaxRaw = q.upsetMax;
     const upsetMax = upsetMaxRaw ? parseFloat(upsetMaxRaw) : undefined;
-    const sort = q("sort") ?? undefined;
-    const order = (q("order") ?? "desc") as "asc" | "desc";
-    const limitRaw = q("limit");
+    const sort = q.sort ?? undefined;
+    const order = (q.order ?? "desc") as "asc" | "desc";
+    const limitRaw = q.limit;
     const limit = limitRaw ? Math.min(parseInt(limitRaw), 500) : 200;
-    const offsetRaw = q("offset");
+    const offsetRaw = q.offset;
     const offset = offsetRaw ? parseInt(offsetRaw) : 0;
 
     const { rows, total } = await queryListings(c.env.DB, {
