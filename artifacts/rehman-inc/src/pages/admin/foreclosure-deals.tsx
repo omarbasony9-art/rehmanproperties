@@ -30,7 +30,8 @@ interface Deal {
   zipCode: string | null;
   upsetAmount: number | null;
   approxJudgment: number | null;
-  estimatedMarketValue: number | null;
+  marketValueUsed: number | null;
+  marketValueSource: string | null;
   foreclosureType: string | null;
   dealRating: string;
   dealScore: number | null;
@@ -114,7 +115,7 @@ function DealCard({ deal }: { deal: Deal }) {
       <div className="grid grid-cols-3 gap-2">
         <div className="rounded-md bg-background/60 border border-border/50 p-2.5 text-center">
           <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Market Value</p>
-          <p className="text-sm font-semibold tabular-nums mt-0.5">{fmt$(deal.estimatedMarketValue)}</p>
+          <p className="text-sm font-semibold tabular-nums mt-0.5">{fmt$(deal.marketValueUsed)}</p>
         </div>
         <div className="rounded-md bg-background/60 border border-border/50 p-2.5 text-center">
           <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Spread</p>
