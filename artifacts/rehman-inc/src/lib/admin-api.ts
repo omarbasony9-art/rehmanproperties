@@ -8,7 +8,9 @@ export async function adminFetch<T = unknown>(
   options: RequestInit = {}
 ): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
-    credentials: "same-origin",
+    // "include" ensures the HttpOnly session cookie is always sent, even
+    // through proxies (Replit preview, Cloudflare Pages, etc.)
+    credentials: "include",
     headers: { "Content-Type": "application/json", ...((options.headers ?? {}) as Record<string, string>) },
     ...options,
   });

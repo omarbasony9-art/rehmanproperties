@@ -1,0 +1,51 @@
+Fix the Cloudflare production admin authentication for Rehman INC.
+Current confirmed behavior:
+Public inquiry submission works and saves to Cloudflare D1.
+/api/admin/inquiries returns {"error":"Not authenticated."} even immediately after logging into /admin.
+The current frontend login page manually seeds React Query with { authenticated: true } after the login response, so the UI can appear logged in even if the browser session cookie was not actually established.
+Fix this properly.
+Requirements:
+Admin login, /admin/me, logout, and all protected admin requests must use SAME-ORIGIN Cloudflare /api/... endpoints.
+Explicitly use:
+credentials: "include"
+for admin login, admin session checks, logout, and all protected admin requests.
+Do not mark the frontend authenticated just because /admin/login returned success.
+After login succeeds, immediately call:
+/api/admin/me
+and only redirect to /admin/dashboard if that endpoint returns:
+{ "authenticated": true }
+Remove the frontend shortcut that blindly does:
+queryClient.setQueryData(..., { authenticated: true })
+unless authentication has actually been verified by /api/admin/me.
+Ensure the Cloudflare login response sets:
+admin_token
+with:
+HttpOnly
+Secure in production
+SameSite=Lax
+Path=/
+Max-Age
+Ensure /api/admin/me reads that same cookie.
+Ensure every admin data request sends the cookie, including:
+inquiries
+dashboard stats
+properties
+FAQs
+website settings
+inquiry notes
+audit log
+Do not use Replit's old API server for admin auth in Cloudflare production.
+Do not fake authentication with localStorage, sessionStorage, or frontend state.
+After fixing it, test this exact production flow:
+POST /api/admin/login
+confirm Set-Cookie contains admin_token
+GET /api/admin/me using that cookie → must return authenticated true
+GET /api/admin/inquiries using that cookie → must return inquiry data
+Keep password controlled by:
+ADMIN_PASSWORD
+Keep session signing controlled by:
+SESSION_SECRET
+Do not change the public website design.
+Do not break inquiry submissions or email notifications.
+Run build and typecheck.
+Fix the actual authentication issue now and tell me when it is complete.

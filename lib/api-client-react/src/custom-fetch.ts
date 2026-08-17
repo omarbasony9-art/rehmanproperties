@@ -360,7 +360,11 @@ export async function customFetch<T = unknown>(
 
   const requestInfo = { method, url: resolveUrl(input) };
 
-  const response = await fetch(input, { ...init, method, headers });
+  // Always include cookies — required for HttpOnly session cookies set by
+  // the server. "include" is safe for same-origin and correct for the Replit
+  // proxy / Cloudflare Pages setup where the cookie domain must match.
+  const credentials = init.credentials ?? "include";
+  const response = await fetch(input, { ...init, method, headers, credentials });
 
   if (!response.ok) {
     const errorData = await parseErrorBody(response, method);
