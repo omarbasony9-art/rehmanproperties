@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 const NAV = [
   { href: "/admin/dashboard",       label: "Dashboard",           icon: LayoutDashboard },
@@ -31,8 +31,15 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
   const logout = useAdminLogout();
   const [mobileOpen, setMobileOpen] = useState(false);
 
+  // Redirect unauthenticated users — useEffect prevents setState-during-render
+  useEffect(() => {
+    if (!isLoading && (!me || !me.authenticated) && location !== "/admin") {
+      setLocation("/admin");
+    }
+  }, [isLoading, me, location, setLocation]);
+
+  // Render nothing while the redirect fires
   if (!isLoading && (!me || !me.authenticated) && location !== "/admin") {
-    setLocation("/admin");
     return null;
   }
 

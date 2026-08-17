@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
-import { useAdminLogin, useGetAdminMe } from "@workspace/api-client-react";
+import { useAdminLogin, useGetAdminMe, getGetAdminMeQueryKey } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Loader2, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,25 +13,33 @@ export default function AdminLogin() {
   const [, setLocation] = useLocation();
   const [password, setPassword] = useState("");
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   
+  // retry:false is set globally in App.tsx so this resolves in one round-trip
   const { data: me, isLoading } = useGetAdminMe();
   const login = useAdminLogin();
 
-  // If already authenticated, redirect
-  if (me?.authenticated) {
-    setLocation("/admin/dashboard");
-    return null;
-  }
+  // Redirect to dashboard once authenticated (useEffect to avoid setState-during-render)
+  useEffect(() => {
+    if (me?.authenticated) {
+      setLocation("/admin/dashboard");
+    }
+  }, [me, setLocation]);
 
   if (isLoading) {
     return <div className="min-h-screen flex items-center justify-center bg-background"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
   }
+
+  // Already authenticated — render nothing while useEffect fires the redirect
+  if (me?.authenticated) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     login.mutate({ data: { password } }, {
       onSuccess: (res) => {
         if (res.authenticated) {
+          // Seed the cache so every other page immediately sees authenticated:true
+          queryClient.setQueryData(getGetAdminMeQueryKey(), { authenticated: true });
           setLocation("/admin/dashboard");
         }
       },

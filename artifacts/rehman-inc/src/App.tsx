@@ -36,7 +36,19 @@ import AdminImages from '@/pages/admin/images';
 import AdminAudit from '@/pages/admin/audit';
 import { ScrollToTop } from '@/components/scroll-to-top';
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      // Never retry on 4xx – avoids the 3-second "401 × 3" delay on the admin login page
+      retry: (failureCount, error) => {
+        const status = (error as { status?: number })?.status;
+        if (status !== undefined && status >= 400 && status < 500) return false;
+        return failureCount < 2;
+      },
+      staleTime: 10_000,
+    },
+  },
+});
 
 function Router() {
   return (

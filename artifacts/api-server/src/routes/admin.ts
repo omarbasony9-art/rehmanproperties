@@ -58,7 +58,7 @@ router.post("/admin/login", async (req, res): Promise<void> => {
     signed: true,
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
-    sameSite: "strict",
+    sameSite: "lax",
     maxAge: COOKIE_MAX_AGE,
   });
 

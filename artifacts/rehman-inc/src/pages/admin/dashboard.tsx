@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { AdminLayout } from "@/components/layout/admin-layout";
 import { 
@@ -68,14 +68,17 @@ export default function AdminDashboard() {
     query: { queryKey: getListAdminInquiriesQueryKey(listParams), enabled: !!me?.authenticated }
   });
 
+  useEffect(() => {
+    if (!meLoading && !me?.authenticated) {
+      setLocation("/admin");
+    }
+  }, [meLoading, me, setLocation]);
+
   if (meLoading) {
     return <div className="min-h-screen flex items-center justify-center bg-background"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
   }
 
-  if (!me?.authenticated) {
-    setLocation("/admin");
-    return null;
-  }
+  if (!me?.authenticated) return null;
 
   return (
     <AdminLayout>
