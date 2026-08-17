@@ -1,0 +1,36 @@
+name = "rehman-inc"
+compatibility_date = "2024-09-23"
+pages_build_output_dir = "./dist/public"
+
+# ============================================================
+# Cloudflare D1 Database
+# ============================================================
+# Create with: wrangler d1 create rehman-inc-db
+# Then apply schema: wrangler d1 execute rehman-inc-db --file=schema.sql
+[[d1_databases]]
+binding = "DB"
+database_name = "rehman-inc-db"
+database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+
+# ============================================================
+# Cloudflare R2 Object Storage (property photos)
+# ============================================================
+# Create bucket: wrangler r2 bucket create rehman-inc-photos
+[[r2_buckets]]
+binding = "PHOTOS"
+bucket_name = "rehman-inc-photos"
+
+# ============================================================
+# Environment Variables
+# ============================================================
+# Set secrets with: wrangler secret put ADMIN_PASSWORD
+# Do NOT put secrets in this file
+[vars]
+ENVIRONMENT = "production"
+
+# ============================================================
+# Local Development Overrides
+# ============================================================
+[dev]
+port = 8788
+local_protocol = "http"

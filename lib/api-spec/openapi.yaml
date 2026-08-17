@@ -3,13 +3,17 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Rehman INC API - Real estate investment company lead management
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: inquiries
+    description: Property inquiry submission
+  - name: admin
+    description: Admin dashboard operations
 paths:
   /healthz:
     get:
@@ -24,6 +28,264 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /inquiries:
+    post:
+      operationId: submitInquiry
+      tags: [inquiries]
+      summary: Submit a property inquiry
+      description: Submit property information for a cash offer request
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InquirySubmission"
+      responses:
+        "201":
+          description: Inquiry submitted successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InquiryConfirmation"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /inquiries/upload-url:
+    post:
+      operationId: getUploadUrl
+      tags: [inquiries]
+      summary: Get a pre-signed URL for photo upload
+      description: Returns a pre-signed upload URL for a property photo. Photos are stored securely.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UploadUrlRequest"
+      responses:
+        "200":
+          description: Upload URL generated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UploadUrlResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /admin/login:
+    post:
+      operationId: adminLogin
+      tags: [admin]
+      summary: Admin login
+      description: Authenticate as an admin user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminCredentials"
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminSession"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /admin/logout:
+    post:
+      operationId: adminLogout
+      tags: [admin]
+      summary: Admin logout
+      description: Invalidate admin session
+      responses:
+        "200":
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /admin/me:
+    get:
+      operationId: getAdminMe
+      tags: [admin]
+      summary: Get current admin session
+      description: Returns the current admin session status
+      responses:
+        "200":
+          description: Admin is authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminSession"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /admin/stats:
+    get:
+      operationId: getAdminStats
+      tags: [admin]
+      summary: Get dashboard statistics
+      description: Returns counts by status for the admin dashboard
+      responses:
+        "200":
+          description: Stats retrieved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardStats"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /admin/inquiries:
+    get:
+      operationId: listAdminInquiries
+      tags: [admin]
+      summary: List all inquiries
+      description: Returns paginated list of inquiries with search and filter support
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: number
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: number
+            default: 20
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [new, contacted, appointment, offer_made, under_contract, closed, lost]
+        - name: sortBy
+          in: query
+          schema:
+            type: string
+            enum: [created_at, full_name, status, address]
+            default: created_at
+        - name: sortDir
+          in: query
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: desc
+      responses:
+        "200":
+          description: Inquiries list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InquiryList"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /admin/inquiries/{id}:
+    get:
+      operationId: getAdminInquiry
+      tags: [admin]
+      summary: Get a single inquiry
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: number
+      responses:
+        "200":
+          description: Inquiry details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InquiryDetail"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateAdminInquiry
+      tags: [admin]
+      summary: Update an inquiry
+      description: Update status or internal notes for an inquiry
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: number
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InquiryUpdate"
+      responses:
+        "200":
+          description: Updated inquiry
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InquiryDetail"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +296,312 @@ components:
       required:
         - status
 
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+
+    SuccessResponse:
+      type: object
+      required: [success]
+      properties:
+        success:
+          type: boolean
+
+    InquirySubmission:
+      type: object
+      required:
+        - address
+        - city
+        - state
+        - zip
+        - fullName
+        - email
+        - phone
+        - preferredContact
+        - contactConsent
+      properties:
+        address:
+          type: string
+          minLength: 3
+        city:
+          type: string
+          minLength: 1
+        state:
+          type: string
+          minLength: 2
+        zip:
+          type: string
+          minLength: 5
+        propertyType:
+          type: ["string", "null"]
+          enum: [single_family, multi_family, condo, townhouse, land, other, null]
+        bedrooms:
+          type: ["string", "null"]
+        bathrooms:
+          type: ["string", "null"]
+        squareFootage:
+          type: ["string", "null"]
+        occupied:
+          type: ["string", "null"]
+        propertyCondition:
+          type: ["string", "null"]
+          enum: [excellent, good, needs_some_work, needs_major_repairs, null]
+        repairs:
+          type: ["string", "null"]
+        sellingReason:
+          type: ["string", "null"]
+        sellingTimeline:
+          type: ["string", "null"]
+          enum: [asap, within_30_days, one_to_three_months, three_to_six_months, just_exploring, null]
+        photoKeys:
+          type: array
+          items:
+            type: string
+          description: R2 object keys for uploaded photos
+        fullName:
+          type: string
+          minLength: 2
+        email:
+          type: string
+          
+        phone:
+          type: string
+          minLength: 10
+        preferredContact:
+          type: string
+          enum: [call, text, email]
+        contactConsent:
+          type: boolean
+        source:
+          type: ["string", "null"]
+        utmSource:
+          type: ["string", "null"]
+        utmMedium:
+          type: ["string", "null"]
+        utmCampaign:
+          type: ["string", "null"]
+
+    InquiryConfirmation:
+      type: object
+      required: [id, inquiryNumber, message]
+      properties:
+        id:
+          type: number
+        inquiryNumber:
+          type: string
+        message:
+          type: string
+        firstName:
+          type: string
+
+    UploadUrlRequest:
+      type: object
+      required: [filename, mimeType]
+      properties:
+        filename:
+          type: string
+        mimeType:
+          type: string
+          enum: [image/jpeg, image/png, image/webp]
+
+    UploadUrlResponse:
+      type: object
+      required: [uploadUrl, objectKey]
+      properties:
+        uploadUrl:
+          type: string
+        objectKey:
+          type: string
+
+    AdminCredentials:
+      type: object
+      required: [password]
+      properties:
+        password:
+          type: string
+
+    AdminSession:
+      type: object
+      required: [authenticated]
+      properties:
+        authenticated:
+          type: boolean
+
+    DashboardStats:
+      type: object
+      required: [new, contacted, appointment, offerMade, underContract, closed, lost, total]
+      properties:
+        new:
+          type: number
+        contacted:
+          type: number
+        appointment:
+          type: number
+        offerMade:
+          type: number
+        underContract:
+          type: number
+        closed:
+          type: number
+        lost:
+          type: number
+        total:
+          type: number
+
+    Inquiry:
+      type: object
+      required:
+        - id
+        - inquiryNumber
+        - createdAt
+        - status
+        - fullName
+        - email
+        - phone
+        - address
+        - city
+        - state
+        - zip
+      properties:
+        id:
+          type: number
+        inquiryNumber:
+          type: string
+        createdAt:
+          type: string
+        status:
+          type: string
+          enum: [new, contacted, appointment, offer_made, under_contract, closed, lost]
+        fullName:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        preferredContact:
+          type: ["string", "null"]
+        address:
+          type: string
+        city:
+          type: string
+        state:
+          type: string
+        zip:
+          type: string
+        propertyType:
+          type: ["string", "null"]
+
+    InquiryDetail:
+      type: object
+      required:
+        - id
+        - inquiryNumber
+        - createdAt
+        - status
+        - fullName
+        - email
+        - phone
+        - address
+        - city
+        - state
+        - zip
+      properties:
+        id:
+          type: number
+        inquiryNumber:
+          type: string
+        createdAt:
+          type: string
+        status:
+          type: string
+          enum: [new, contacted, appointment, offer_made, under_contract, closed, lost]
+        fullName:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        preferredContact:
+          type: ["string", "null"]
+        address:
+          type: string
+        city:
+          type: string
+        state:
+          type: string
+        zip:
+          type: string
+        propertyType:
+          type: ["string", "null"]
+        bedrooms:
+          type: ["string", "null"]
+        bathrooms:
+          type: ["string", "null"]
+        squareFootage:
+          type: ["string", "null"]
+        occupied:
+          type: ["string", "null"]
+        propertyCondition:
+          type: ["string", "null"]
+        repairs:
+          type: ["string", "null"]
+        sellingReason:
+          type: ["string", "null"]
+        sellingTimeline:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+        source:
+          type: ["string", "null"]
+        utmSource:
+          type: ["string", "null"]
+        utmMedium:
+          type: ["string", "null"]
+        utmCampaign:
+          type: ["string", "null"]
+        photos:
+          type: array
+          items:
+            $ref: "#/components/schemas/PropertyPhoto"
+
+    PropertyPhoto:
+      type: object
+      required: [id, objectKey, originalFilename, uploadedAt]
+      properties:
+        id:
+          type: number
+        objectKey:
+          type: string
+        originalFilename:
+          type: string
+        mimeType:
+          type: ["string", "null"]
+        uploadedAt:
+          type: string
+
+    InquiryUpdate:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [new, contacted, appointment, offer_made, under_contract, closed, lost]
+        notes:
+          type: ["string", "null"]
+
+    InquiryList:
+      type: object
+      required: [items, total, page, limit]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Inquiry"
+        total:
+          type: number
+        page:
+          type: number
+        limit:
+          type: number

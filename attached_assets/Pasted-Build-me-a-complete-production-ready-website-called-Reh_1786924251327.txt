@@ -1,0 +1,870 @@
+Build me a complete production-ready website called **Rehman INC** for a real estate investment company that buys houses directly from homeowners for cash.
+
+The #1 priority is making this website look extremely professional, trustworthy, modern, and optimized to turn visitors into property seller leads.
+
+IMPORTANT: Build this as cheaply as possible to operate.
+
+## COST REQUIREMENTS
+
+Do NOT add unnecessary paid services.
+
+Use this architecture:
+
+* React + Vite + TypeScript frontend
+* Cloudflare Pages for hosting
+* Cloudflare Pages Functions or Workers for backend API routes
+* Cloudflare D1 for the database
+* Cloudflare R2 for property photo uploads
+* Resend or another simple transactional email API for inquiry notification emails
+* GitHub for source control/deployment
+* No PostgreSQL
+* No Supabase
+* No Firebase
+* No Clerk
+* No Stripe
+* No OpenAI
+* No AI features
+* No expensive third-party CMS
+* Keep npm dependencies minimal
+
+The project should be designed so I can build/edit it in Replit, push it to GitHub, and have Cloudflare deploy it.
+
+Do NOT redesign the project around Replit hosting.
+
+---
+
+# BRAND
+
+Company name:
+
+**REHMAN INC**
+
+Create a premium real estate investment company aesthetic.
+
+Design direction:
+
+* Luxury but approachable
+* Modern
+* Extremely clean
+* High-converting
+* Professional
+* Mobile-first
+* Not like a cheap yellow "WE BUY HOUSES" website
+
+Use:
+
+* Dark charcoal / near-black
+* Deep emerald green
+* Warm white
+* Subtle gold accents where appropriate
+* High-quality real-estate imagery
+* Large typography
+* Plenty of whitespace
+* Smooth subtle animations
+* Premium cards
+* Rounded elements
+* Strong mobile experience
+
+Create a temporary text-based REHMAN INC logo/wordmark that can easily be replaced with my real logo later.
+
+---
+
+# MAIN GOAL
+
+The website's primary goal is getting homeowners to submit their property information.
+
+Every important section should naturally lead people toward:
+
+**GET MY CASH OFFER**
+
+Do not make the website feel spammy.
+
+---
+
+# HEADER
+
+Desktop navigation:
+
+REHMAN INC
+
+* Home
+* How It Works
+* Why Us
+* Properties
+* FAQ
+* Contact
+
+CTA button:
+
+**Get My Cash Offer**
+
+Mobile:
+
+Create a clean hamburger menu and keep a prominent CTA available.
+
+---
+
+# HERO SECTION
+
+Create an impressive hero section.
+
+Headline:
+
+**Sell Your House for Cash.**
+
+Subheadline:
+
+**Skip the Repairs. Skip the Stress.**
+
+Supporting text:
+
+Sell your property as-is and see if Rehman INC can provide a straightforward, no-obligation offer.
+
+Immediately include:
+
+Property Address
+
+[ Enter your property address ]
+
+[ GET MY CASH OFFER → ]
+
+Below it:
+
+* Sell As-Is
+* No Open Houses
+* No Obligation
+* Flexible Closing
+
+Use a premium house/property visual in the background.
+
+Make the hero look excellent on desktop and mobile.
+
+---
+
+# PROPERTY LEAD FORM
+
+Do NOT show one giant form.
+
+Create a polished multi-step form/modal.
+
+When someone enters an address from the hero and clicks Get My Cash Offer, continue into the form.
+
+Create a progress bar.
+
+## STEP 1 — PROPERTY
+
+Fields:
+
+* Property Address *
+* City *
+* State *
+* ZIP *
+* Property Type
+
+Property type options:
+
+* Single Family
+* Multi-Family
+* Condo
+* Townhouse
+* Land
+* Other
+
+Button:
+
+Continue →
+
+---
+
+## STEP 2 — PROPERTY DETAILS
+
+Fields:
+
+* Bedrooms
+* Bathrooms
+* Approximate Square Footage
+* Is the property currently occupied?
+* Property Condition
+
+Condition options:
+
+* Excellent
+* Good
+* Needs Some Work
+* Needs Major Repairs
+
+Additional fields:
+
+* Major repairs needed
+* Why are you considering selling?
+* How soon would you like to sell?
+
+Timeline options:
+
+* ASAP
+* Within 30 Days
+* 1–3 Months
+* 3–6 Months
+* Just Exploring
+
+---
+
+## STEP 3 — PROPERTY PHOTOS
+
+Title:
+
+**Show Us The Property**
+
+Description:
+
+Property photos can help our team better understand the property.
+
+Create a modern drag-and-drop photo uploader.
+
+Allow:
+
+* JPG
+* JPEG
+* PNG
+* WEBP
+
+Support mobile uploads.
+
+Allow up to 15 images.
+
+Show thumbnail previews.
+
+Allow users to remove uploaded images before submitting.
+
+PHOTO UPLOADS MUST BE OPTIONAL.
+
+Display:
+
+**Photos are optional. You can still request an offer without uploading any.**
+
+Uploads should go securely to Cloudflare R2.
+
+Do not expose private storage credentials in frontend code.
+
+Use signed/backend controlled upload methods.
+
+---
+
+## STEP 4 — CONTACT
+
+Headline:
+
+**Where Should We Contact You?**
+
+Fields:
+
+* Full Name *
+* Email *
+* Phone Number *
+* Preferred Contact Method
+
+Options:
+
+* Call
+* Text
+* Email
+
+Checkbox:
+
+I agree to be contacted by Rehman INC regarding this property.
+
+Do NOT automatically add marketing consent unless separately and clearly disclosed.
+
+Submit button:
+
+**SUBMIT MY PROPERTY →**
+
+---
+
+# AFTER SUBMISSION
+
+Show a professional success screen:
+
+**Thank You, [First Name].**
+
+We've received your property information.
+
+A member of the Rehman INC team will review your submission and contact you.
+
+Create a unique inquiry number such as:
+
+REH-2026-00001
+
+---
+
+# DATABASE
+
+Use Cloudflare D1.
+
+Create a proper database schema.
+
+Create an inquiries table containing:
+
+* id
+* inquiry_number
+* created_at
+* status
+* full_name
+* email
+* phone
+* preferred_contact
+* address
+* city
+* state
+* zip
+* property_type
+* bedrooms
+* bathrooms
+* square_footage
+* occupied
+* property_condition
+* repairs
+* selling_reason
+* selling_timeline
+* notes
+* source
+* utm_source
+* utm_medium
+* utm_campaign
+
+Create another table for property photos:
+
+* id
+* inquiry_id
+* object_key
+* original_filename
+* mime_type
+* uploaded_at
+
+Use proper foreign keys.
+
+---
+
+# EMAIL NOTIFICATION
+
+When a homeowner submits an inquiry:
+
+Send an email to an address that I will later provide through an environment variable.
+
+Use something like:
+
+INQUIRY_NOTIFICATION_EMAIL
+
+Do not hardcode the email address.
+
+Email subject:
+
+**NEW PROPERTY INQUIRY — [Property Address] — Rehman INC**
+
+Email content should clearly show:
+
+PROPERTY
+
+* Address
+* City
+* State
+* ZIP
+* Property Type
+* Bedrooms
+* Bathrooms
+* Square Footage
+* Occupancy
+* Condition
+* Repairs
+
+SELLER
+
+* Name
+* Email
+* Phone
+* Preferred Contact Method
+
+SELLING INFORMATION
+
+* Why they are selling
+* Timeline
+
+INQUIRY
+
+* Inquiry Number
+* Submission Date
+* Lead Source
+
+PHOTOS
+
+Provide secure links to submitted property photos if photos were uploaded.
+
+Do NOT attach huge original image files directly to the email.
+
+---
+
+# ADMIN DASHBOARD
+
+Create:
+
+/admin
+
+Do NOT leave the admin dashboard publicly accessible.
+
+Use a simple secure authentication system appropriate for Cloudflare.
+
+Avoid expensive third-party authentication services.
+
+Admin dashboard should have:
+
+## Dashboard stats
+
+* New Leads
+* Contacted
+* Appointments
+* Offers Made
+* Under Contract
+* Closed
+
+## Lead list
+
+Columns:
+
+* Inquiry #
+* Property
+* Seller
+* Phone
+* Date
+* Status
+
+Allow search.
+
+Allow filters.
+
+Allow sorting.
+
+Clicking a lead should open the full inquiry.
+
+Show uploaded property photos.
+
+Allow admin to add internal notes.
+
+Allow changing status:
+
+* New
+* Contacted
+* Appointment
+* Offer Made
+* Under Contract
+* Closed
+* Lost
+
+Do not make the admin unnecessarily complicated.
+
+---
+
+# HOMEPAGE SECTIONS
+
+After the hero add:
+
+## TRUST SECTION
+
+Headline:
+
+**A Simpler Way to Sell Your Property**
+
+Cards:
+
+* Sell As-Is
+* Skip Open Houses
+* Flexible Timeline
+* Straightforward Process
+
+Do not make claims that cannot be verified.
+
+---
+
+# HOW IT WORKS
+
+Create three premium numbered sections:
+
+## 01
+
+**Tell Us About Your Property**
+
+Enter your address and answer a few quick questions.
+
+## 02
+
+**We Review The Property**
+
+Our team evaluates the property's location, condition, and relevant property details.
+
+## 03
+
+**Review Your Offer**
+
+If the property is a fit, we'll contact you to discuss next steps.
+
+No obligation to accept.
+
+---
+
+# WHY REHMAN INC
+
+Headline:
+
+**Selling Doesn't Have To Be Complicated.**
+
+Create a visual comparison.
+
+Traditional Sale:
+
+* Repairs
+* Showings
+* Staging
+* Open Houses
+* Financing Uncertainty
+* Longer Process
+
+Rehman INC:
+
+* Sell As-Is
+* No Open Houses
+* Simple Process
+* Direct Communication
+* Flexible Timeline
+
+Do not claim "zero fees" or "we pay all closing costs" unless I later specifically confirm that.
+
+---
+
+# SITUATIONS SECTION
+
+Headline:
+
+**Whatever The Situation, Let's Talk.**
+
+Cards for:
+
+* Inherited Property
+* Vacant Property
+* Major Repairs
+* Problem Tenants
+* Relocation
+* Downsizing
+* Unwanted Rental
+* Fire or Water Damage
+* Divorce
+* Foreclosure Concerns
+* Ready To Sell
+
+Use careful wording.
+
+Do not imply that Rehman INC provides legal, tax, foreclosure, or financial advice.
+
+---
+
+# PROPERTIES SECTION
+
+Create a section:
+
+**Properties We've Purchased**
+
+For now use clearly marked placeholder content.
+
+Build it so I can later easily replace placeholders with:
+
+* Actual property image
+* City
+* State
+* Property type
+
+Do NOT fabricate fake transactions or claim placeholder properties were actually purchased.
+
+---
+
+# TESTIMONIALS
+
+Create the design for testimonials but do NOT create fake customer reviews.
+
+Until real reviews are provided, either:
+
+* hide the section
+
+OR
+
+* clearly display it as placeholder content only in development mode.
+
+---
+
+# FAQ
+
+Create an attractive accordion.
+
+Questions:
+
+* Do I need to repair my house before selling?
+* How is an offer determined?
+* Am I obligated to accept an offer?
+* Can I sell a property with tenants?
+* What types of properties does Rehman INC consider?
+* What happens after I submit my property?
+* How quickly can the process move?
+
+Keep answers professional and avoid guarantees.
+
+---
+
+# FINAL CTA
+
+Large premium section:
+
+**Ready To Talk About Your Property?**
+
+Enter your property address and get started.
+
+[ PROPERTY ADDRESS ]
+
+[ GET STARTED → ]
+
+---
+
+# FOOTER
+
+Include:
+
+REHMAN INC
+
+Navigation
+
+* Home
+* How It Works
+* Why Us
+* FAQ
+* Contact
+
+Legal:
+
+* Privacy Policy
+* Terms
+* Accessibility
+
+Contact information should use placeholders/environment variables until I provide real business information.
+
+---
+
+# PRIVACY POLICY
+
+Create a real Privacy Policy page structure covering:
+
+* Contact information
+* Property information
+* Property photographs
+* Website analytics
+* How information is used
+* How information is stored
+* Service providers
+* Data security
+* Contact requests
+* Cookies
+* Privacy inquiries
+
+Do not pretend this is legal advice.
+
+---
+
+# TERMS
+
+Create a basic Terms page structure.
+
+---
+
+# SEO
+
+Implement:
+
+* Unique page titles
+* Meta descriptions
+* Open Graph metadata
+* Twitter/X metadata
+* Canonical URLs
+* sitemap.xml
+* robots.txt
+* structured data where appropriate
+* semantic HTML
+* fast loading
+* optimized images
+* lazy loading
+
+Homepage title:
+
+**Sell Your House for Cash | Rehman INC**
+
+Build the website so local SEO pages can easily be added later.
+
+Example future routes:
+
+/sell-my-house-fast
+/cash-home-buyers
+/sell-house-as-is
+/sell-inherited-house
+/sell-rental-property
+/sell-house-needing-repairs
+
+Do NOT create hundreds of thin automatically generated location pages.
+
+---
+
+# TRACKING
+
+Build support for:
+
+* Google Analytics
+* Google Ads conversion tracking
+* Meta Pixel
+* UTM parameters
+
+BUT:
+
+Do not require these services for the site to function.
+
+Use environment/config variables so I can add IDs later.
+
+Store lead source and UTM information with inquiries.
+
+---
+
+# SECURITY
+
+This is important.
+
+Implement:
+
+* Server-side validation
+* Client-side validation
+* Rate limiting
+* Bot protection compatibility with Cloudflare Turnstile
+* Secure photo upload validation
+* Maximum file sizes
+* MIME type checking
+* Sanitized inputs
+* Secure API routes
+* No secrets exposed to frontend
+* Protected admin routes
+* Secure cookies
+* CSRF protection where applicable
+* Proper security headers
+* Prevent unauthorized access to seller information
+
+Never expose the D1 database publicly.
+
+Never expose R2 secrets.
+
+---
+
+# PERFORMANCE
+
+Target excellent Lighthouse scores.
+
+Avoid massive JavaScript dependencies.
+
+Optimize images.
+
+Use lazy loading.
+
+Don't load unnecessary libraries.
+
+Do not add animations that hurt performance.
+
+---
+
+# MOBILE
+
+Mobile design is extremely important.
+
+The form must be easy to complete with one hand.
+
+Add a sticky mobile CTA:
+
+**Get My Cash Offer**
+
+Phone/email fields should use appropriate mobile keyboard types.
+
+Photo upload should work well from a phone camera/photo library.
+
+---
+
+# DEVELOPMENT REQUIREMENTS
+
+Keep the code organized.
+
+Create reusable components.
+
+Do NOT put the entire site into one giant component.
+
+Use a structure similar to:
+
+src/
+components/
+pages/
+lib/
+hooks/
+styles/
+
+functions/
+api/
+
+Create a README explaining:
+
+1. Local development
+2. Environment variables
+3. D1 setup
+4. R2 setup
+5. Email API setup
+6. Cloudflare deployment
+7. GitHub deployment
+8. Admin setup
+
+Create an `.env.example`.
+
+Never put actual secrets into GitHub.
+
+---
+
+# VERY IMPORTANT
+
+Do not change the architecture to something more expensive just because it is easier.
+
+If there is a choice between a free/low-cost Cloudflare feature and a paid external service, use the Cloudflare option when technically reasonable.
+
+Do not add AI features.
+
+Do not add unnecessary integrations.
+
+Do not add paid APIs unless essential.
+
+Do not use fake reviews.
+
+Do not make fake claims.
+
+Do not fabricate properties Rehman INC supposedly purchased.
+
+Do not guarantee offer amounts or closing times.
+
+Make the site look like a company someone would confidently trust with a six-figure real estate transaction.
+
+Before finishing:
+
+1. Run the TypeScript typecheck.
+2. Run the production build.
+3. Fix all errors.
+4. Check desktop layout.
+5. Check mobile layout.
+6. Make sure the inquiry form works end-to-end.
+7. Make sure failed submissions display useful errors.
+8. Make sure photos are optional.
+9. Make sure no secrets are committed.
+10. Give me a list of environment variables I still need to provide.
+
+START BUILDING THE WEBSITE. Do not just explain how you would build it.

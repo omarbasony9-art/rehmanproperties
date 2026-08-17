@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Rehman INC"
+description = "A premium real estate investment company website for Rehman INC. Homeowners can submit properties for cash offers through a polished multi-step lead form. Includes an admin dashboard to manage inquiries, track deal pipeline, and view uploaded property photos. Designed for Cloudflare Pages deployment with D1 database and R2 object storage."
+version = "1.0.0"
+id = "artifacts/rehman-inc"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 21776
+
+[services.development]
+run = "pnpm --filter @workspace/rehman-inc run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/rehman-inc", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/rehman-inc/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "21776"
+BASE_PATH = "/"
