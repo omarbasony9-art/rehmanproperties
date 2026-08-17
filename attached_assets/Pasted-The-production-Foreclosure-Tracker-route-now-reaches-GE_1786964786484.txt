@@ -1,0 +1,93 @@
+The production Foreclosure Tracker route now reaches:
+
+GET /api/foreclosures/listings?limit=50&sort=upset&order=asc&offset=0
+
+but Cloudflare returns:
+
+500 Internal Server Error
+
+Wrangler tail cannot be used from Replit because Cloudflare OAuth times out on the localhost callback.
+
+DO NOT guess and DO NOT redesign anything.
+
+Inspect the actual Cloudflare foreclosure backend code and determine what can throw during:
+
+GET /api/foreclosures/listings
+
+Specifically inspect:
+
+artifacts/rehman-inc/functions/api/[[route]].ts
+artifacts/rehman-inc/functions/_foreclosures.ts
+
+and all SQL used by:
+
+ensureForeclosuresTable()
+queryListings()
+
+Compare every column referenced by queryListings against every column actually created by ensureForeclosuresTable.
+
+This is especially important because CREATE TABLE IF NOT EXISTS does NOT add missing columns to an existing D1 table.
+
+Look for likely production schema mismatches such as:
+
+- county
+- upset_amount / upset
+- market_value
+- zillow_value
+- redfin_value
+- spread
+- discount_percent
+- deal_score
+- warning_count
+- sale_date
+- sheriff_number
+- last_synced_at
+- any field used in SELECT, WHERE or ORDER BY
+
+Also inspect indexes. Make sure no CREATE INDEX references a column that may not exist in an older production table.
+
+Fix this with a SAFE forward migration.
+
+Do NOT:
+- drop the foreclosure table
+- delete existing records
+- reset D1
+- change secrets
+- add another database
+- push to GitHub yet
+
+If existing D1 installations may be missing columns, create an idempotent migration routine that:
+
+1. reads PRAGMA table_info(foreclosures)
+2. checks which required columns exist
+3. ALTER TABLE ADD COLUMN only for missing columns
+4. creates indexes only after required columns exist
+5. can safely run repeatedly
+
+Also change the foreclosure listings route so an exception is caught and returned as JSON instead of plain text.
+
+For now return something like:
+
+{
+  "error": "Unable to load foreclosure listings",
+  "detail": "<safe error message>"
+}
+
+Do not expose secrets, API keys, cookies, stack traces, or environment variable values.
+
+Log the full exception server-side with console.error.
+
+Then run:
+
+- production build
+- TypeScript checks
+
+After inspection tell me:
+
+1. The exact likely cause of the 500.
+2. Which column/table/index caused it.
+3. What safe migration you added.
+4. Whether I need to manually run SQL in Cloudflare D1.
+5. Which files changed.
+
+DO NOT push to GitHub.

@@ -1115,42 +1115,60 @@ app.get("/foreclosures", async (c) => {
 
 // GET /api/foreclosures/listings — public (no auth required)
 app.get("/foreclosures/listings", async (c) => {
-  await ensureFcSchema(c.env);
-  const q = c.req.query;
-  const county = q("county") ?? undefined;
-  const search = q("search") ?? undefined;
-  const deal = q("deal") ?? undefined;
-  const type = q("type") ?? undefined;
-  const upsetMaxRaw = q("upsetMax");
-  const upsetMax = upsetMaxRaw ? parseFloat(upsetMaxRaw) : undefined;
-  const sort = q("sort") ?? undefined;
-  const order = (q("order") ?? "desc") as "asc" | "desc";
-  const limitRaw = q("limit");
-  const limit = limitRaw ? Math.min(parseInt(limitRaw), 500) : 200;
-  const offsetRaw = q("offset");
-  const offset = offsetRaw ? parseInt(offsetRaw) : 0;
+  try {
+    await ensureFcSchema(c.env);
+    const q = c.req.query;
+    const county = q("county") ?? undefined;
+    const search = q("search") ?? undefined;
+    const deal = q("deal") ?? undefined;
+    const type = q("type") ?? undefined;
+    const upsetMaxRaw = q("upsetMax");
+    const upsetMax = upsetMaxRaw ? parseFloat(upsetMaxRaw) : undefined;
+    const sort = q("sort") ?? undefined;
+    const order = (q("order") ?? "desc") as "asc" | "desc";
+    const limitRaw = q("limit");
+    const limit = limitRaw ? Math.min(parseInt(limitRaw), 500) : 200;
+    const offsetRaw = q("offset");
+    const offset = offsetRaw ? parseInt(offsetRaw) : 0;
 
-  const { rows, total } = await queryListings(c.env.DB, {
-    county, search, deal, type, upsetMax, sort, order, limit, offset,
-  });
-  return c.json({ rows, total, limit, offset });
+    const { rows, total } = await queryListings(c.env.DB, {
+      county, search, deal, type, upsetMax, sort, order, limit, offset,
+    });
+    return c.json({ rows, total, limit, offset });
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    console.error("[foreclosures/listings] error:", err);
+    return c.json({ error: "Unable to load foreclosure listings", detail }, 500);
+  }
 });
 
 // GET /api/foreclosures/stats — public
 app.get("/foreclosures/stats", async (c) => {
-  await ensureFcSchema(c.env);
-  const stats = await queryStats(c.env.DB);
-  return c.json(stats);
+  try {
+    await ensureFcSchema(c.env);
+    const stats = await queryStats(c.env.DB);
+    return c.json(stats);
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    console.error("[foreclosures/stats] error:", err);
+    return c.json({ error: "Unable to load foreclosure stats", detail }, 500);
+  }
 });
 
 // GET /api/foreclosures/listings/:sheriffNumber — public
 app.get("/foreclosures/listings/:sheriff", async (c) => {
-  await ensureFcSchema(c.env);
-  const sheriff = c.req.param("sheriff");
-  if (!sheriff) return c.json({ error: "sheriff_number required" }, 400);
-  const row = await getForeclosureBySherifffNumber(c.env.DB, sheriff.toUpperCase());
-  if (!row) return c.json({ error: "Not found" }, 404);
-  return c.json(row);
+  try {
+    await ensureFcSchema(c.env);
+    const sheriff = c.req.param("sheriff");
+    if (!sheriff) return c.json({ error: "sheriff_number required" }, 400);
+    const row = await getForeclosureBySherifffNumber(c.env.DB, sheriff.toUpperCase());
+    if (!row) return c.json({ error: "Not found" }, 404);
+    return c.json(row);
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    console.error("[foreclosures/listing] error:", err);
+    return c.json({ error: "Unable to load foreclosure listing", detail }, 500);
+  }
 });
 
 // POST /api/foreclosures/sync/:county — admin only

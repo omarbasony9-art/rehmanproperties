@@ -797,67 +797,175 @@ function computeWarnings(opts: {
 
 // ─── D1 schema init ──────────────────────────────────────────────────────────
 
+/**
+ * All columns that must exist in the foreclosures table.
+ * Entries are [column_name, sqlite_type_and_default].
+ * These are used both in CREATE TABLE and in the ALTER TABLE forward migration.
+ * NOTE: "id" and "sheriff_number" are excluded from ALTER TABLE because they are
+ * the primary/unique key and cannot be added with ADD COLUMN to a non-empty table.
+ */
+const FC_COLUMNS_AFTER_PK: ReadonlyArray<[string, string]> = [
+  ["county",                    "TEXT NOT NULL DEFAULT 'Atlantic'"],
+  ["court_case_number",         "TEXT"],
+  ["current_sale_date",         "TEXT"],
+  ["original_sale_date",        "TEXT"],
+  ["plaintiff",                 "TEXT"],
+  ["defendant",                 "TEXT"],
+  ["address",                   "TEXT"],
+  ["city",                      "TEXT"],
+  ["state",                     "TEXT"],
+  ["zip_code",                  "TEXT"],
+  ["attorney",                  "TEXT"],
+  ["approx_judgment",           "REAL"],
+  ["upset_amount",              "REAL"],
+  ["priors_liens_taxes",        "TEXT"],
+  ["tax_lot",                   "TEXT"],
+  ["block",                     "TEXT"],
+  ["nearest_cross_street",      "TEXT"],
+  ["occupancy_status",          "TEXT"],
+  ["property_notes",            "TEXT"],
+  ["detail_url",                "TEXT"],
+  ["google_maps_url",           "TEXT"],
+  ["zillow_url",                "TEXT"],
+  ["foreclosure_type",          "TEXT DEFAULT 'unknown'"],
+  ["classification_confidence", "TEXT"],
+  ["classification_evidence",   "TEXT"],
+  ["deal_rating",               "TEXT DEFAULT 'UNKNOWN'"],
+  ["deal_score",                "REAL"],
+  ["estimated_spread",          "REAL"],
+  ["discount_percent",          "REAL"],
+  ["equity_multiple",           "REAL"],
+  ["deal_warnings",             "TEXT DEFAULT '[]'"],
+  ["zillow_estimate",           "REAL"],
+  ["zillow_status",             "TEXT DEFAULT 'NOT_CONFIGURED'"],
+  ["zillow_fetched_at",         "TEXT"],
+  ["zillow_property_url",       "TEXT"],
+  ["redfin_estimate",           "REAL"],
+  ["redfin_status",             "TEXT DEFAULT 'NOT_CONFIGURED'"],
+  ["redfin_fetched_at",         "TEXT"],
+  ["redfin_property_url",       "TEXT"],
+  ["market_value_used",         "REAL"],
+  ["market_value_source",       "TEXT DEFAULT 'NONE'"],
+  ["valuation_updated_at",      "TEXT"],
+  ["status_history",            "TEXT DEFAULT '[]'"],
+  ["permanently_excluded",      "INTEGER DEFAULT 0"],
+  ["is_removed",                "INTEGER DEFAULT 0"],
+  ["first_seen",                "TEXT"],
+  ["last_seen",                 "TEXT"],
+  ["last_updated",              "TEXT"],
+];
+
+const FC_INDEXES: ReadonlyArray<[string, string]> = [
+  ["idx_fc_county",    "county"],
+  ["idx_fc_upset",     "upset_amount"],
+  ["idx_fc_sale_date", "current_sale_date"],
+  ["idx_fc_rating",    "deal_rating"],
+  ["idx_fc_market",    "market_value_used"],
+  ["idx_fc_discount",  "discount_percent"],
+];
+
+/**
+ * Idempotent schema migration for the foreclosures table.
+ *
+ * Safe to call on every request. Works correctly whether the table:
+ *   (a) does not exist yet            — creates it with full schema
+ *   (b) is already up to date         — PRAGMA confirms nothing is missing, no-op
+ *   (c) was created by an older build — ALTER TABLE ADD COLUMN adds missing columns
+ *
+ * Why not db.batch() for DDL?  D1 runs batches inside a single transaction.
+ * SQLite DDL (CREATE INDEX) on an existing table inside a transaction can fail
+ * when the statement depends on columns that exist only after a preceding
+ * CREATE TABLE in the same batch.  Running statements individually isolates
+ * failures to the statement that actually failed.
+ */
 export async function ensureForeclosuresTable(db: D1Database): Promise<void> {
-  await db.batch([
-    db.prepare(`CREATE TABLE IF NOT EXISTS foreclosures (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      sheriff_number TEXT UNIQUE NOT NULL,
-      county TEXT NOT NULL DEFAULT 'Atlantic',
-      court_case_number TEXT,
-      current_sale_date TEXT,
-      original_sale_date TEXT,
-      plaintiff TEXT,
-      defendant TEXT,
-      address TEXT,
-      city TEXT,
-      state TEXT,
-      zip_code TEXT,
-      attorney TEXT,
-      approx_judgment REAL,
-      upset_amount REAL,
-      priors_liens_taxes TEXT,
-      tax_lot TEXT,
-      block TEXT,
-      nearest_cross_street TEXT,
-      occupancy_status TEXT,
-      property_notes TEXT,
-      detail_url TEXT,
-      google_maps_url TEXT,
-      zillow_url TEXT,
-      foreclosure_type TEXT DEFAULT 'unknown',
-      classification_confidence TEXT,
-      classification_evidence TEXT,
-      deal_rating TEXT DEFAULT 'UNKNOWN',
-      deal_score REAL,
-      estimated_spread REAL,
-      discount_percent REAL,
-      equity_multiple REAL,
-      deal_warnings TEXT DEFAULT '[]',
-      zillow_estimate REAL,
-      zillow_status TEXT DEFAULT 'NOT_CONFIGURED',
-      zillow_fetched_at TEXT,
-      zillow_property_url TEXT,
-      redfin_estimate REAL,
-      redfin_status TEXT DEFAULT 'NOT_CONFIGURED',
-      redfin_fetched_at TEXT,
-      redfin_property_url TEXT,
-      market_value_used REAL,
-      market_value_source TEXT DEFAULT 'NONE',
-      valuation_updated_at TEXT,
-      status_history TEXT DEFAULT '[]',
-      permanently_excluded INTEGER DEFAULT 0,
-      is_removed INTEGER DEFAULT 0,
-      first_seen TEXT,
-      last_seen TEXT,
-      last_updated TEXT
-    )`),
-    db.prepare(`CREATE INDEX IF NOT EXISTS idx_fc_county ON foreclosures(county)`),
-    db.prepare(`CREATE INDEX IF NOT EXISTS idx_fc_upset ON foreclosures(upset_amount)`),
-    db.prepare(`CREATE INDEX IF NOT EXISTS idx_fc_sale_date ON foreclosures(current_sale_date)`),
-    db.prepare(`CREATE INDEX IF NOT EXISTS idx_fc_rating ON foreclosures(deal_rating)`),
-    db.prepare(`CREATE INDEX IF NOT EXISTS idx_fc_market ON foreclosures(market_value_used)`),
-    db.prepare(`CREATE INDEX IF NOT EXISTS idx_fc_discount ON foreclosures(discount_percent)`),
-  ]);
+  // ── 1. Create table with full schema if it does not exist yet ──────────────
+  await db.prepare(`CREATE TABLE IF NOT EXISTS foreclosures (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    sheriff_number TEXT UNIQUE NOT NULL,
+    county TEXT NOT NULL DEFAULT 'Atlantic',
+    court_case_number TEXT,
+    current_sale_date TEXT,
+    original_sale_date TEXT,
+    plaintiff TEXT,
+    defendant TEXT,
+    address TEXT,
+    city TEXT,
+    state TEXT,
+    zip_code TEXT,
+    attorney TEXT,
+    approx_judgment REAL,
+    upset_amount REAL,
+    priors_liens_taxes TEXT,
+    tax_lot TEXT,
+    block TEXT,
+    nearest_cross_street TEXT,
+    occupancy_status TEXT,
+    property_notes TEXT,
+    detail_url TEXT,
+    google_maps_url TEXT,
+    zillow_url TEXT,
+    foreclosure_type TEXT DEFAULT 'unknown',
+    classification_confidence TEXT,
+    classification_evidence TEXT,
+    deal_rating TEXT DEFAULT 'UNKNOWN',
+    deal_score REAL,
+    estimated_spread REAL,
+    discount_percent REAL,
+    equity_multiple REAL,
+    deal_warnings TEXT DEFAULT '[]',
+    zillow_estimate REAL,
+    zillow_status TEXT DEFAULT 'NOT_CONFIGURED',
+    zillow_fetched_at TEXT,
+    zillow_property_url TEXT,
+    redfin_estimate REAL,
+    redfin_status TEXT DEFAULT 'NOT_CONFIGURED',
+    redfin_fetched_at TEXT,
+    redfin_property_url TEXT,
+    market_value_used REAL,
+    market_value_source TEXT DEFAULT 'NONE',
+    valuation_updated_at TEXT,
+    status_history TEXT DEFAULT '[]',
+    permanently_excluded INTEGER DEFAULT 0,
+    is_removed INTEGER DEFAULT 0,
+    first_seen TEXT,
+    last_seen TEXT,
+    last_updated TEXT
+  )`).run();
+
+  // ── 2. Discover which columns already exist ────────────────────────────────
+  // PRAGMA table_info returns one row per column with at least a "name" field.
+  const pragma = await db.prepare("PRAGMA table_info(foreclosures)")
+    .all<{ name: string }>();
+  const existing = new Set((pragma.results ?? []).map((r) => r.name));
+
+  // ── 3. Forward migration: add any columns that are missing ─────────────────
+  // ALTER TABLE ADD COLUMN is safe on non-empty tables as long as we do NOT
+  // add NOT NULL without a DEFAULT, or add PRIMARY KEY / UNIQUE constraints.
+  for (const [col, def] of FC_COLUMNS_AFTER_PK) {
+    if (!existing.has(col)) {
+      // Strip NOT NULL from the definition — SQLite ALTER TABLE ADD COLUMN
+      // does not allow NOT NULL unless there is a DEFAULT.
+      // All columns here either have a DEFAULT or are nullable, so this is safe.
+      const safeDef = def.replace(/\bNOT NULL\b/gi, "").trim();
+      try {
+        await db.prepare(`ALTER TABLE foreclosures ADD COLUMN ${col} ${safeDef}`).run();
+      } catch {
+        // Race condition (another request added the column first) — safe to ignore.
+      }
+    }
+  }
+
+  // ── 4. Create indexes individually — do NOT use db.batch() for DDL ────────
+  // CREATE INDEX IF NOT EXISTS is idempotent; each failure is isolated.
+  for (const [name, col] of FC_INDEXES) {
+    try {
+      await db.prepare(`CREATE INDEX IF NOT EXISTS ${name} ON foreclosures(${col})`).run();
+    } catch {
+      // If the column still doesn't exist on an old table the index creation
+      // fails silently — queries still work via full scan on that column.
+    }
+  }
 }
 
 // ─── D1 upsert ───────────────────────────────────────────────────────────────
