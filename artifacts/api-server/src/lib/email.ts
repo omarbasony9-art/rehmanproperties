@@ -124,8 +124,10 @@ ${photoSection}
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      from: process.env.RESEND_FROM_EMAIL ?? "Rehman INC <onboarding@resend.dev>",
-      replyTo: inquiry.email,
+      from: process.env.RESEND_FROM_EMAIL
+        ? `Rehman INC <${process.env.RESEND_FROM_EMAIL.replace(/^.*<(.+)>$/, "$1").trim()}>`
+        : "Rehman INC <onboarding@resend.dev>",
+      reply_to: inquiry.email,
       to: [toEmail],
       subject: `NEW PROPERTY INQUIRY — ${inquiry.address}, ${inquiry.city}, ${inquiry.state} — Rehman INC`,
       text: emailBody,

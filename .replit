@@ -23,3 +23,4 @@ timeoutMs = 20000
 
 [userenv.shared]
 INQUIRY_NOTIFICATION_EMAIL = "Aliproperties91@gmail.com"
+RESEND_FROM_EMAIL = "inquiries@therehmanproperties.com"
