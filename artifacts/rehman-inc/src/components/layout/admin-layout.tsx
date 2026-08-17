@@ -49,6 +49,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
   }
 
   const handleLogout = () => {
+    sessionStorage.removeItem("admin_token");
     logout.mutate(undefined, {
       onSuccess: () => {
         window.scrollTo(0, 0);

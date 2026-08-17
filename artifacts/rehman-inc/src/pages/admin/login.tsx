@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
-import { useAdminLogin, useGetAdminMe, getGetAdminMeQueryKey } from "@workspace/api-client-react";
+import { useAdminLogin, useGetAdminMe, getGetAdminMeQueryKey, setAuthTokenGetter } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Loader2, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -43,33 +43,22 @@ export default function AdminLogin() {
     setLoading(true);
 
     try {
-      // Step 1 — POST /api/admin/login (sets the HttpOnly session cookie)
-      await login.mutateAsync({ data: { password } });
+      // Step 1 — POST /api/admin/login
+      // The server returns { authenticated: true, token } in the body.
+      // We store the token in sessionStorage so all subsequent requests can
+      // send it as a Bearer header — this works regardless of cookie policy
+      // (Replit preview iframe, third-party cookie blocking, etc.).
+      const result = await login.mutateAsync({ data: { password } }) as { authenticated: boolean; token?: string };
 
-      // Step 2 — Verify the cookie was actually established by calling
-      // /api/admin/me for real. Do NOT seed the cache with setQueryData.
-      // If the Set-Cookie was blocked or malformed, this will return 401
-      // and we show an error instead of a phantom "logged-in" state.
-      await queryClient.refetchQueries({
-        queryKey: getGetAdminMeQueryKey(),
-        exact: true,
-      });
-
-      const meData = queryClient.getQueryData<{ authenticated: boolean }>(
-        getGetAdminMeQueryKey()
-      );
-
-      if (!meData?.authenticated) {
-        // Login POST succeeded but the session cookie isn't being sent back —
-        // most likely a browser cookie policy or SameSite issue.
-        toast({
-          title: "Session Error",
-          description:
-            "Signed in but the session could not be established. " +
-            "Check that cookies are allowed for this site.",
-          variant: "destructive",
-        });
+      if (result.token) {
+        sessionStorage.setItem("admin_token", result.token);
+        // Re-register the getter in case the module-level init ran before
+        // the token was stored (e.g. first login after a fresh page load).
+        setAuthTokenGetter(() => sessionStorage.getItem("admin_token"));
       }
+
+      // Step 2 — Confirm the session is valid by hitting /api/admin/me.
+      await queryClient.refetchQueries({ queryKey: getGetAdminMeQueryKey(), exact: true });
       // If authenticated, the useEffect above fires the redirect automatically.
     } catch (err: unknown) {
       const apiErr = err as { data?: { error?: string }; status?: number } | null;

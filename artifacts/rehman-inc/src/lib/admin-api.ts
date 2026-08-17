@@ -7,11 +7,18 @@ export async function adminFetch<T = unknown>(
   path: string,
   options: RequestInit = {}
 ): Promise<T> {
+  // Send the Bearer token from sessionStorage (fallback for when cookies are
+  // blocked in the Replit preview iframe or other cross-site contexts).
+  const token = sessionStorage.getItem("admin_token");
+  const authHeader = token ? { Authorization: `Bearer ${token}` } : {};
+
   const res = await fetch(`${BASE}${path}`, {
-    // "include" ensures the HttpOnly session cookie is always sent, even
-    // through proxies (Replit preview, Cloudflare Pages, etc.)
     credentials: "include",
-    headers: { "Content-Type": "application/json", ...((options.headers ?? {}) as Record<string, string>) },
+    headers: {
+      "Content-Type": "application/json",
+      ...authHeader,
+      ...((options.headers ?? {}) as Record<string, string>),
+    },
     ...options,
   });
   if (!res.ok) {

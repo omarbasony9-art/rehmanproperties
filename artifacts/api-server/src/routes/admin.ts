@@ -15,11 +15,18 @@ const router: IRouter = Router();
 const COOKIE_NAME = "admin_token";
 const COOKIE_MAX_AGE = 24 * 60 * 60 * 1000; // 24 hours
 
-// Middleware helper
+// Middleware helper — accepts both signed cookie (browser) and Bearer token (sessionStorage fallback)
 function isAuthenticated(req: Parameters<Parameters<IRouter["get"]>[1]>[0]): boolean {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const token = (req as any).signedCookies?.[COOKIE_NAME];
-  return validateSession(token);
+  const cookieToken = (req as any).signedCookies?.[COOKIE_NAME];
+  if (cookieToken && validateSession(cookieToken)) return true;
+
+  const authHeader = req.headers.authorization ?? "";
+  if (authHeader.startsWith("Bearer ")) {
+    const bearerToken = authHeader.slice(7).trim();
+    return validateSession(bearerToken);
+  }
+  return false;
 }
 
 // POST /admin/login
@@ -68,7 +75,9 @@ router.post("/admin/login", async (req, res): Promise<void> => {
   });
 
   req.log.info("Admin login successful");
-  res.json({ authenticated: true });
+  // Return the token in the body so the client can store it in sessionStorage
+  // as a fallback when cookies are blocked (e.g. Replit preview iframe).
+  res.json({ authenticated: true, token });
 });
 
 // POST /admin/logout

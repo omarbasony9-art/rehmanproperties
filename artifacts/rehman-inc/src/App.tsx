@@ -37,6 +37,11 @@ import AdminAudit from '@/pages/admin/audit';
 import AdminForeclosures from '@/pages/admin/foreclosures';
 import AdminForeclosureDeals from '@/pages/admin/foreclosure-deals';
 import { ScrollToTop } from '@/components/scroll-to-top';
+import { setAuthTokenGetter } from '@workspace/api-client-react';
+
+// Wire up the Bearer token getter once — reads from sessionStorage on every
+// request so the token survives page reloads without re-logging in.
+setAuthTokenGetter(() => sessionStorage.getItem('admin_token'));
 
 const queryClient = new QueryClient({
   defaultOptions: {

@@ -19,8 +19,15 @@ const COOKIE_NAME = "admin_token";
 
 function isAuthenticated(req: Parameters<Parameters<IRouter["get"]>[1]>[0]): boolean {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const token = (req as any).signedCookies?.[COOKIE_NAME];
-  return validateSession(token);
+  const cookieToken = (req as any).signedCookies?.[COOKIE_NAME];
+  if (cookieToken && validateSession(cookieToken)) return true;
+
+  const authHeader = req.headers.authorization ?? "";
+  if (authHeader.startsWith("Bearer ")) {
+    const bearerToken = authHeader.slice(7).trim();
+    return validateSession(bearerToken);
+  }
+  return false;
 }
 
 function sanitize(val: unknown, max = 10000): string | null {
