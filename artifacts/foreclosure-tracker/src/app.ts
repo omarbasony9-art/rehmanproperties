@@ -20,6 +20,16 @@ app.set("trust proxy", 1);
 
 app.use(express.json({ limit: "100kb" }));
 
+// Replit proxy routing: strip /foreclosure-tracker prefix from all incoming paths
+// so that /foreclosure-tracker/api/... hits the same routes as /api/...
+app.use((req, _res, next) => {
+  const prefix = "/foreclosure-tracker";
+  if (req.url.startsWith(prefix)) {
+    req.url = req.url.slice(prefix.length) || "/";
+  }
+  next();
+});
+
 // Rate limiting — public API endpoints only
 const publicLimiter = rateLimit({
   windowMs: 60_000,
