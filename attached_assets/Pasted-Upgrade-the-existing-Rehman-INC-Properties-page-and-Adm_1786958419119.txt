@@ -1,0 +1,958 @@
+Upgrade the existing **Rehman INC Properties page and Admin Panel** into a complete property listing system.
+
+DO NOT rebuild the website.
+DO NOT change the existing branding.
+DO NOT add an expensive real estate platform, MLS service, or paid CMS.
+
+Keep this as cheap as possible using the existing:
+
+* React/Vite website
+* Cloudflare Pages
+* Cloudflare Pages Functions
+* Cloudflare D1
+* Existing Admin Panel
+* Existing CMS system
+
+# MAIN GOAL
+
+I want to be able to log into the Rehman INC admin panel and post ANY property I am selling.
+
+From Admin I should be able to:
+
+* Add a property
+* Edit a property
+* Delete a property
+* Save as draft
+* Publish a property
+* Unpublish a property
+* Mark a property Pending
+* Mark a property Sold
+* Change the price
+* Change the address
+* Change the caption
+* Change the description
+* Add property details
+* Add pictures
+* Choose the main/featured picture
+* Reorder pictures
+* Change any property information later
+
+When I press **Publish**, the property should AUTOMATICALLY appear on:
+
+`https://therehmanproperties.com/properties`
+
+without needing:
+
+* Replit
+* GitHub
+* git push
+* Cloudflare redeployment
+* manual code changes
+
+Use:
+
+**Admin → D1 → Public Website**
+
+for property updates.
+
+---
+
+# ADMIN → PROPERTIES
+
+Create/improve:
+
+**Admin → Properties**
+
+At the top add:
+
+**+ Add Property**
+
+Show existing properties in a professional management table/card view.
+
+Include:
+
+* Featured image
+* Address
+* Price
+* Status
+* Date added
+* Published/Draft status
+* Edit
+* Preview
+* Delete
+
+Add search and filters.
+
+Filters:
+
+* All
+* Published
+* Draft
+* For Sale
+* Pending
+* Sold
+
+---
+
+# ADD PROPERTY FORM
+
+When I click:
+
+**+ Add Property**
+
+open a professional property editor.
+
+## BASIC INFORMATION
+
+Fields:
+
+### Listing Title
+
+Example:
+
+`Renovated Home in Northfield`
+
+This can be optional because the address can also act as the main title.
+
+### Full Address
+
+Fields:
+
+* Street Address
+* Unit/Apt if applicable
+* City
+* State
+* ZIP Code
+
+Example:
+
+`123 Main Street`
+`Northfield, NJ 08225`
+
+### Price
+
+Allow me to enter:
+
+`350000`
+
+Display publicly as:
+
+`$350,000`
+
+Store price numerically in D1.
+
+Do NOT store `$350,000` as the sortable database value.
+
+### Listing Status
+
+Options:
+
+* For Sale
+* Pending
+* Sold
+* Coming Soon
+
+### Caption
+
+Give me a short caption field.
+
+Example:
+
+`Beautiful 3-bedroom home with a spacious backyard and updated interior.`
+
+This caption should show on the property card.
+
+### Full Description
+
+Give me a larger description editor where I can explain the property.
+
+Allow normal formatting such as:
+
+* Paragraphs
+* Bold
+* Lists
+
+Do NOT allow unsafe JavaScript or arbitrary executable HTML.
+
+---
+
+# PROPERTY DETAILS
+
+Allow me to enter:
+
+* Bedrooms
+* Bathrooms
+* Square Feet
+* Lot Size
+* Property Type
+* Year Built
+* Parking
+* Garage
+* Basement
+* Heating
+* Cooling
+
+Property Type options:
+
+* Single Family
+* Multi-Family
+* Condo
+* Townhouse
+* Land
+* Commercial
+* Investment Property
+* Other
+
+Only display a detail publicly if I actually entered a value.
+
+Do not show:
+
+`0 bedrooms`
+
+or blank information.
+
+---
+
+# PROPERTY FEATURES
+
+Allow me to add/remove features.
+
+Example:
+
+* Updated Kitchen
+* Hardwood Floors
+* Central Air
+* Finished Basement
+* Garage
+* Large Backyard
+* New Roof
+* Waterfront
+* Investment Opportunity
+
+Allow unlimited reasonable feature items.
+
+Store them in D1.
+
+---
+
+# PROPERTY PHOTOS
+
+I need to be able to control all property pictures.
+
+For each property allow:
+
+* Add pictures
+* Remove pictures
+* Select featured/main picture
+* Reorder pictures
+* Add image alt text
+* Preview pictures
+
+The first/main image should appear on the Properties page.
+
+Individual property pages should display a professional photo gallery.
+
+IMPORTANT ABOUT COST:
+
+I currently do NOT want to enable a paid image-storage service.
+
+Do NOT force Cloudflare R2 as a requirement.
+
+For now support:
+
+1. Existing website/static images
+2. Image URLs entered through admin
+3. Existing Media/CMS image references
+
+Structure the system so Cloudflare R2 uploads can easily be enabled later if I choose to use it.
+
+Do NOT store giant base64 image files directly inside D1.
+
+If direct uploads cannot be done without adding storage costs, keep image URL/media selection available and clearly explain that limitation instead of adding a paid service.
+
+---
+
+# PROPERTIES PAGE DESIGN
+
+Upgrade:
+
+`/properties`
+
+This is no longer just an informational page.
+
+It should now be the page where people can browse **properties currently offered by Rehman INC**.
+
+Hero:
+
+Small text:
+
+**AVAILABLE PROPERTIES**
+
+Headline:
+
+**Properties Available From Rehman INC**
+
+Supporting copy:
+
+Explore properties currently available through Rehman INC.
+
+Use the professional full-width hero design already established on the website.
+
+---
+
+# PROPERTY LISTING CARDS
+
+Below the hero show a clean professional property grid.
+
+Each card should contain:
+
+### Property Picture
+
+Large featured image.
+
+### Status Badge
+
+Example:
+
+**FOR SALE**
+
+or:
+
+**PENDING**
+
+### Price
+
+Large and prominent:
+
+**$350,000**
+
+### Address
+
+Example:
+
+**123 Main Street**
+
+**Northfield, NJ 08225**
+
+### Basic Details
+
+Example:
+
+`3 Beds • 2 Baths • 1,850 Sq Ft`
+
+### Caption
+
+Example:
+
+`Updated home with modern finishes, large backyard and convenient location.`
+
+Button:
+
+**View Property →**
+
+Make the cards look like a professional real estate website.
+
+Do NOT make them look like generic AI-generated cards.
+
+---
+
+# INDIVIDUAL PROPERTY PAGE
+
+Every published property should automatically receive its own page.
+
+Example:
+
+`/properties/123-main-street-northfield-nj`
+
+Use clean SEO-friendly slugs.
+
+The individual property page should include:
+
+# Property Gallery
+
+Large main image.
+
+Thumbnail gallery underneath/on the side.
+
+Click image to enlarge where appropriate.
+
+# Price
+
+Example:
+
+**$350,000**
+
+# Address
+
+Full public property address.
+
+# Status
+
+For Sale / Pending / Sold / Coming Soon
+
+# Quick Facts
+
+Example:
+
+**3**
+Bedrooms
+
+**2**
+Bathrooms
+
+**1,850**
+Sq Ft
+
+# Description
+
+Show the full admin-entered property description.
+
+# Features
+
+Show property features.
+
+# Contact CTA
+
+Add:
+
+**Interested in This Property?**
+
+Contact Rehman INC for more information or to schedule a conversation.
+
+Buttons:
+
+**Call Ali**
+
+link to:
+
+`tel:+16095821061`
+
+and:
+
+**Send an Inquiry**
+
+---
+
+# PROPERTY INQUIRY
+
+Each individual property page should have an inquiry form.
+
+Fields:
+
+* Name
+* Email
+* Phone
+* Message
+
+Automatically associate the inquiry with the property.
+
+The email notification should contain:
+
+**PROPERTY INQUIRY**
+
+Property:
+`123 Main Street, Northfield, NJ`
+
+Price:
+`$350,000`
+
+Seller/Visitor:
+
+* Name
+* Email
+* Phone
+* Message
+
+Send it to:
+
+`Aliproperties91@gmail.com`
+
+Continue using the existing Resend configuration.
+
+Also save the inquiry to D1/admin.
+
+Do NOT lose the inquiry if email delivery fails.
+
+---
+
+# CONTACT DETAILS
+
+Use the existing global contact information:
+
+**Ali Rehman**
+
+Phone:
+
+`609-582-1061`
+
+Email:
+
+`Aliproperties91@gmail.com`
+
+Instagram:
+
+`https://www.instagram.com/ali_monopoly/?utm_source=ig_web_button_share_sheet`
+
+Do not duplicate/hardcode different contact information.
+
+Use the global CMS settings.
+
+---
+
+# PROPERTY DATABASE
+
+Upgrade the existing `properties` D1 table as necessary.
+
+Each property should support fields such as:
+
+* id
+* slug
+* listing_title
+* street_address
+* unit
+* city
+* state
+* zip
+* price
+* status
+* caption
+* description
+* property_type
+* bedrooms
+* bathrooms
+* square_feet
+* lot_size
+* year_built
+* parking
+* garage
+* basement
+* heating
+* cooling
+* features
+* featured_image
+* images
+* published
+* featured
+* sort_order
+* seo_title
+* meta_description
+* created_at
+* updated_at
+* published_at
+
+Use safe D1 migrations.
+
+DO NOT drop my existing production tables.
+
+DO NOT delete:
+
+* inquiries
+* website content
+* FAQs
+* settings
+* admin configuration
+
+---
+
+# AUTO PUBLISHING
+
+This is extremely important.
+
+When I create a property in Admin and click:
+
+**Publish**
+
+the flow should be:
+
+Admin
+→ authenticated Pages Function
+→ validate property
+→ save/update D1
+→ property immediately appears on `/properties`
+→ individual property URL becomes available
+→ sitemap updates automatically
+
+NO GITHUB PUSH.
+
+NO CLOUDFLARE REDEPLOYMENT.
+
+NO REPLIT REQUIRED.
+
+If I edit the property later:
+
+Admin
+→ Save
+→ D1 updates
+→ live property automatically changes.
+
+If I mark:
+
+**Sold**
+
+the public listing should automatically display:
+
+**SOLD**
+
+If I choose:
+
+**Unpublish**
+
+remove it from the public listings but KEEP it in Admin.
+
+Do not permanently delete data just because I unpublish something.
+
+---
+
+# PROPERTY PREVIEW
+
+In admin add:
+
+**Preview Property**
+
+This should open the public-style property page in a new tab before I publish it.
+
+Draft properties should only be previewable while authenticated as admin.
+
+Do not expose unpublished property pages publicly.
+
+---
+
+# FEATURED PROPERTIES ON HOMEPAGE
+
+Allow admin to mark:
+
+**Featured Property**
+
+The homepage can display a:
+
+**Featured Properties**
+
+or:
+
+**Available Properties**
+
+section.
+
+Allow me to control how many are shown.
+
+Example:
+
+3 latest featured properties.
+
+If no properties are published, hide the section automatically instead of displaying fake properties.
+
+---
+
+# SORTING
+
+On `/properties` allow visitors to sort:
+
+**Newest**
+
+**Price: Low to High**
+
+**Price: High to Low**
+
+Do the price comparison numerically.
+
+---
+
+# FILTERS
+
+If enough properties exist, allow simple filters:
+
+* Property Type
+* Status
+* City
+* Bedrooms
+
+Do not overcomplicate this initially.
+
+---
+
+# SOLD PROPERTIES
+
+Allow me to choose whether Sold properties:
+
+1. Remain publicly visible with a SOLD badge
+
+or:
+
+2. Move to a separate Sold/Previous Properties section
+
+Add this as an admin setting.
+
+Do NOT pretend a property was sold by Rehman INC unless I actually added and marked it that way.
+
+---
+
+# SEO
+
+Every property should automatically have proper SEO metadata.
+
+Example title:
+
+`123 Main Street, Northfield NJ | Rehman INC`
+
+Allow me to override:
+
+* SEO title
+* Meta description
+* Open Graph title
+* Open Graph description
+* Social image
+
+Canonical example:
+
+`https://therehmanproperties.com/properties/123-main-street-northfield-nj`
+
+Add property URLs automatically to the sitemap when:
+
+`published = true`
+
+Remove them when unpublished.
+
+Do not index draft properties.
+
+---
+
+# STRUCTURED DATA
+
+If appropriate and factually accurate, generate relevant structured data for the property page.
+
+Never invent:
+
+* MLS numbers
+* ratings
+* listing agents
+* brokers
+* prices
+* addresses
+* property information
+
+Only structured data derived from the actual admin-entered listing.
+
+---
+
+# ADMIN PROPERTY EDITING
+
+I need to be able to come back months later and change anything.
+
+Example:
+
+Property initially:
+
+Price:
+
+`$350,000`
+
+I change admin to:
+
+`$329,900`
+
+Press Save.
+
+The public website should immediately show:
+
+`$329,900`
+
+everywhere that property appears.
+
+Same behavior for:
+
+* Address
+* Caption
+* Description
+* Pictures
+* Bedrooms
+* Bathrooms
+* Status
+* Features
+* SEO
+
+---
+
+# DELETE PROTECTION
+
+When I click Delete:
+
+Show:
+
+**Are you sure you want to permanently delete this property?**
+
+Prefer:
+
+Archive
+
+over permanent deletion where practical.
+
+Do not accidentally delete properties.
+
+---
+
+# ADMIN AUDIT LOG
+
+Record important property actions:
+
+* Property created
+* Property edited
+* Price changed
+* Property published
+* Property unpublished
+* Property marked pending
+* Property marked sold
+* Property archived
+
+Include date/time.
+
+---
+
+# DESIGN
+
+Make the public Properties section feel like an actual professional real estate inventory website.
+
+Use:
+
+* Large property photography
+* Strong price typography
+* Clean address presentation
+* Spacious layout
+* Professional badges
+* Minimal clutter
+* Existing Rehman INC colors
+* Mobile-responsive gallery
+
+Do NOT make everything overly rounded.
+
+Do NOT use excessive gradients.
+
+Do NOT use fake MLS styling.
+
+Do NOT make it look AI-generated.
+
+---
+
+# MOBILE
+
+Property browsing must be excellent on phones.
+
+Property cards:
+
+* Full-width where appropriate
+* Large image
+* Easy-to-read price
+* Easy-to-read address
+
+Individual listing:
+
+* Swipeable/usable photo gallery
+* Phone button
+* Inquiry CTA
+* Readable property facts
+
+---
+
+# PERFORMANCE
+
+Do NOT load every full-resolution property image on the Properties page.
+
+Use:
+
+* Optimized thumbnails
+* lazy loading
+* responsive images
+
+Load the full gallery only when a visitor opens the property.
+
+Keep public website performance fast.
+
+---
+
+# KEEP THIS CHEAP
+
+Do NOT add:
+
+* Zillow API
+* MLS API
+* Realtor API
+* paid property feed
+* paid CMS
+* paid database
+* paid image platform
+* Firebase
+* Supabase
+* WordPress
+* OpenAI
+
+Properties are manually entered by ME through admin.
+
+D1 should store the property information.
+
+The public website should read that information from D1.
+
+---
+
+# IMPORTANT
+
+This Properties system is for properties I choose to advertise/sell.
+
+It is completely separate from homeowner cash-offer inquiries.
+
+Do NOT mix seller lead properties with public Properties listings.
+
+A homeowner submitting their property for a cash offer should NOT automatically make their property publicly visible.
+
+Only properties that I explicitly create/publish in:
+
+**Admin → Properties**
+
+should appear publicly.
+
+---
+
+# FINAL TEST
+
+Before saying complete:
+
+1. Log into Admin.
+2. Add a test property.
+3. Enter an address.
+4. Enter price.
+5. Enter caption.
+6. Enter description.
+7. Enter bedrooms.
+8. Enter bathrooms.
+9. Enter square footage.
+10. Add an image reference.
+11. Save as draft.
+12. Confirm it is NOT public.
+13. Preview it as admin.
+14. Publish it.
+15. Confirm it immediately appears on `/properties`.
+16. Confirm individual property URL works.
+17. Change the price.
+18. Confirm public price changes without redeployment.
+19. Change the caption.
+20. Confirm it changes.
+21. Mark it Pending.
+22. Confirm badge changes.
+23. Mark it Sold.
+24. Confirm SOLD appears.
+25. Unpublish it.
+26. Confirm it disappears publicly.
+27. Confirm it remains available in Admin.
+28. Test property inquiry.
+29. Confirm inquiry saves to D1.
+30. Confirm email goes to `Aliproperties91@gmail.com`.
+31. Confirm property page SEO.
+32. Confirm sitemap updates.
+33. Test mobile.
+34. Run TypeScript typecheck.
+35. Run production build.
+36. Confirm no new paid services were added.
+
+Implement this now.
+
+Do not only tell me how it could work.
+
+Actually build the complete property publishing system into the existing Rehman INC website and admin dashboard.

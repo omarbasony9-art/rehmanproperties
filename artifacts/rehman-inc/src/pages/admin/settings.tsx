@@ -54,6 +54,7 @@ export default function AdminSettings() {
     mutationFn: () => saveSiteSettings(form),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin-site-settings"] });
+      qc.invalidateQueries({ queryKey: ["site-config"] });
       toast({ title: "Website settings saved" });
       setDirty(false);
     },

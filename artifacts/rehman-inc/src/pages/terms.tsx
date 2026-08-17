@@ -3,9 +3,15 @@ import { Footer } from "@/components/layout/footer";
 import { MultiStepForm } from "@/components/marketing/multi-step-form";
 import { useState } from "react";
 import { useSEO } from "@/hooks/use-seo";
+import { usePageContent } from "@/hooks/use-page-content";
 
 export default function TermsPage() {
-  useSEO("Terms of Service | Rehman INC", "Terms of Service for Rehman INC.");
+  const content = usePageContent("terms");
+  useSEO(
+    content.seoTitle || "Terms of Service | Rehman INC",
+    content.seoDescription || "Terms of Service for Rehman INC.",
+    { ogTitle: content.ogTitle || undefined, ogDescription: content.ogDescription || undefined, ogImage: content.ogImage || undefined }
+  );
   const [formOpen, setFormOpen] = useState(false);
 
   return (
@@ -14,13 +20,13 @@ export default function TermsPage() {
       
       <main className="flex-1 pt-32 pb-24 container mx-auto px-4 max-w-4xl">
         <div className="mb-12">
-          <h1 className="font-serif text-4xl md:text-5xl font-bold mb-4">Terms of Service</h1>
-          <p className="text-muted-foreground text-lg">Last Updated: October 2026</p>
+          <h1 className="font-serif text-4xl md:text-5xl font-bold mb-4">{content.pageTitle}</h1>
+          <p className="text-muted-foreground text-lg">Last Updated: {content.lastUpdated}</p>
         </div>
 
         <div className="prose prose-lg dark:prose-invert max-w-none font-sans text-muted-foreground">
           <div className="bg-muted p-6 rounded-lg mb-8 border border-border">
-            <strong>Disclaimer:</strong> This page is for informational purposes only and does not constitute legal, tax, or financial advice.
+            <strong>Disclaimer:</strong> {content.disclaimer}
           </div>
 
           <h2 className="text-foreground font-serif">1. Acceptance of Terms</h2>

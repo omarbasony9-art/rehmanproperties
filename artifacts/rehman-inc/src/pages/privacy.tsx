@@ -3,9 +3,15 @@ import { Footer } from "@/components/layout/footer";
 import { MultiStepForm } from "@/components/marketing/multi-step-form";
 import { useState } from "react";
 import { useSEO } from "@/hooks/use-seo";
+import { usePageContent } from "@/hooks/use-page-content";
 
 export default function PrivacyPage() {
-  useSEO("Privacy Policy | Rehman INC", "Privacy Policy for Rehman INC.");
+  const content = usePageContent("privacy");
+  useSEO(
+    content.seoTitle || "Privacy Policy | Rehman INC",
+    content.seoDescription || "Privacy Policy for Rehman INC.",
+    { ogTitle: content.ogTitle || undefined, ogDescription: content.ogDescription || undefined, ogImage: content.ogImage || undefined }
+  );
   const [formOpen, setFormOpen] = useState(false);
 
   return (
@@ -14,13 +20,13 @@ export default function PrivacyPage() {
       
       <main className="flex-1 pt-32 pb-24 container mx-auto px-4 max-w-4xl">
         <div className="mb-12">
-          <h1 className="font-serif text-4xl md:text-5xl font-bold mb-4">Privacy Policy</h1>
-          <p className="text-muted-foreground text-lg">Last Updated: October 2026</p>
+          <h1 className="font-serif text-4xl md:text-5xl font-bold mb-4">{content.pageTitle}</h1>
+          <p className="text-muted-foreground text-lg">Last Updated: {content.lastUpdated}</p>
         </div>
 
         <div className="prose prose-lg dark:prose-invert max-w-none font-sans text-muted-foreground">
           <div className="bg-muted p-6 rounded-lg mb-8 border border-border">
-            <strong>Disclaimer:</strong> This page describes our privacy practices and is for informational purposes only. It does not constitute legal advice.
+            <strong>Disclaimer:</strong> {content.disclaimer}
           </div>
 
           <h2 className="text-foreground font-serif">1. Information We Collect</h2>

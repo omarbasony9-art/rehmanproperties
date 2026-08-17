@@ -576,7 +576,7 @@ app.put("/admin/site-settings", async (c) => {
 
 // ── Page Content ────────────────────────────────────────────────────────────
 
-const VALID_PAGES = ["home","sell","how-it-works","why-us","properties","faq","contact","footer"];
+const VALID_PAGES = ["home","sell","how-it-works","why-us","properties","faq","contact","footer","privacy","terms"];
 
 app.get("/admin/page-content/:page", async (c) => {
   const token = getCookie(c, COOKIE_NAME);
@@ -891,6 +891,127 @@ app.get("/site/page-content/:page", async (c) => {
   const [row] = await db.select().from(siteSettingsTable)
     .where(eq(siteSettingsTable.key, `page_content:${page}`));
   return c.json(row ? JSON.parse(row.value) : {});
+});
+
+// ── Seed: insert default settings without overwriting existing ones ────────
+app.post("/site/seed", async (c) => {
+  const token = getCookie(c, COOKIE_NAME);
+  if (!(await isAuthed(c as never, token))) return unauthed(c);
+  const db = getDb(c.env);
+
+  const DEFAULT_SETTINGS: { key: string; value: string }[] = [
+    { key: "company_name",   value: "Rehman INC" },
+    { key: "contact_name",   value: "Ali Rehman" },
+    { key: "contact_phone",  value: "609-582-1061" },
+    { key: "contact_email",  value: "Aliproperties91@gmail.com" },
+    { key: "instagram_url",  value: "https://www.instagram.com/ali_monopoly/?utm_source=ig_web_button_share_sheet" },
+    { key: "page_content:home", value: JSON.stringify({
+      heroEyebrow:       "Direct Real Estate Investments",
+      heroHeadline:      "Sell Your House for Cash.",
+      heroSubheadline:   "Skip the Repairs. Skip the Stress.",
+      heroBody:          "Sell your property as-is and see if Rehman INC can provide a straightforward, no-obligation offer.",
+      heroCta:           "GET MY CASH OFFER",
+      heroImage:         "",
+      howItWorksTitle:   "How It Works",
+      howItWorksSubtitle:"Our process is designed to be transparent, efficient, and entirely built around your needs.",
+      whyUsTitle:        "A Simpler Way to Sell Your Property",
+      whyUsSubtitle:     "",
+      situationsTitle:   "Whatever The Situation, Let's Talk.",
+      situationsSubtitle:"We work with property owners navigating a variety of circumstances.",
+      finalCtaTitle:     "Ready To Talk About Your Property?",
+      finalCtaSubtitle:  "Enter your property address below to start the process. No pressure, no obligations.",
+      finalCtaButton:    "GET STARTED",
+    }) },
+    { key: "page_content:sell", value: JSON.stringify({
+      heroEyebrow:  "Sell Directly",
+      heroHeadline: "Sell Your Property Without the Traditional Hassle.",
+      heroSubtext:  "Tell us about your property and see whether Rehman INC is the right fit for your situation.",
+      formTitle:    "Start Your Inquiry",
+      formSubtitle: "It takes just a few minutes to provide the details we need to begin our review.",
+    }) },
+    { key: "page_content:how-it-works", value: JSON.stringify({
+      heroEyebrow:  "The Process",
+      heroHeadline: "A Straightforward Way to Sell.",
+      heroSubtext:  "From the first property details to the final conversation, we keep the process clear and direct.",
+      step1Title:   "Tell us about your property",
+      step1Body:    "Submit your address and answer a few initial questions about the property's condition and your current situation.",
+      step2Title:   "Rehman INC reviews the property",
+      step2Body:    "Our team evaluates the property's location, current condition, market factors, and required repairs.",
+      step3Title:   "Discuss an offer if the property is a fit",
+      step3Body:    "If the property aligns with our criteria, we'll have a straightforward conversation about a cash offer with no obligation.",
+    }) },
+    { key: "page_content:why-us", value: JSON.stringify({
+      heroEyebrow:  "Why Rehman INC",
+      heroHeadline: "Real Estate. Direct Conversations. Clear Decisions.",
+      heroSubtext:  "We provide property owners with an alternative to the traditional listing process.",
+      intro:        "Rehman INC works directly with property owners who prioritize simplicity, speed, and certainty over the traditional listing process.",
+    }) },
+    { key: "page_content:contact", value: JSON.stringify({
+      heroEyebrow:  "Contact Rehman INC",
+      heroHeadline: "Let's Talk About Your Property.",
+      heroSubtext:  "Have a property you're considering selling? Send us the details and we'll get in touch.",
+      intro:        "",
+    }) },
+    { key: "page_content:privacy", value: JSON.stringify({
+      pageTitle:   "Privacy Policy",
+      lastUpdated: "October 2026",
+      disclaimer:  "This page describes our privacy practices and is for informational purposes only. It does not constitute legal advice.",
+    }) },
+    { key: "page_content:terms", value: JSON.stringify({
+      pageTitle:   "Terms of Service",
+      lastUpdated: "October 2026",
+      disclaimer:  "This page is for informational purposes only and does not constitute legal, tax, or financial advice.",
+    }) },
+    { key: "page_content:faq", value: JSON.stringify({
+      heroEyebrow:  "Common Questions",
+      heroHeadline: "Questions About Selling? Start Here.",
+      heroSubtext:  "Learn more about the Rehman INC process and what to expect when you contact us.",
+    }) },
+    { key: "page_content:properties", value: JSON.stringify({
+      heroEyebrow:  "Our Portfolio",
+      heroHeadline: "Real Estate We Acquire and Manage.",
+      heroSubtext:  "Explore the types of properties that fit the Rehman INC investment strategy.",
+    }) },
+    { key: "page_content:footer", value: JSON.stringify({
+      tagline:    "We provide straightforward, no-obligation cash offers for properties in any condition. Skip the repairs, showings, and uncertainty of a traditional sale.",
+      disclaimer: "Rehman INC does not provide legal, tax, or financial advice.",
+      copyright:  "",
+    }) },
+  ];
+
+  let inserted = 0;
+  const now = NOW();
+  for (const row of DEFAULT_SETTINGS) {
+    const [existing] = await db.select().from(siteSettingsTable)
+      .where(eq(siteSettingsTable.key, row.key));
+
+    if (!existing) {
+      // No record yet — insert the full default
+      await db.insert(siteSettingsTable).values({ ...row, updatedAt: now });
+      inserted++;
+    } else if (row.key.startsWith("page_content:")) {
+      // Merge field-level: defaults only fill keys that are missing or blank
+      let current: Record<string, string> = {};
+      try { current = JSON.parse(existing.value) as Record<string, string>; } catch { /* ok */ }
+      const defaults = JSON.parse(row.value) as Record<string, string>;
+      let changed = false;
+      for (const [k, v] of Object.entries(defaults)) {
+        if (!current[k] || current[k].trim() === "") {
+          current[k] = v;
+          changed = true;
+        }
+      }
+      if (changed) {
+        await db.update(siteSettingsTable)
+          .set({ value: JSON.stringify(current), updatedAt: now })
+          .where(eq(siteSettingsTable.key, row.key));
+        inserted++;
+      }
+    }
+    // For non-page_content scalar settings, skip if exists (never overwrite)
+  }
+
+  return c.json({ ok: true, inserted, total: DEFAULT_SETTINGS.length });
 });
 
 // ══════════════════════════════════════════════════════════════════════════

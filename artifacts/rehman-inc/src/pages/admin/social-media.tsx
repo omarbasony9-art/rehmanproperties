@@ -48,6 +48,7 @@ export default function AdminSocialMedia() {
     mutationFn: () => saveSiteSettings(form),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin-site-settings"] });
+      qc.invalidateQueries({ queryKey: ["site-config"] });
       toast({ title: "Social media links saved" });
       setDirty(false);
     },

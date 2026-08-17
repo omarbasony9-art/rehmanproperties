@@ -18,6 +18,8 @@ const SEO_PAGES = [
   { id: "properties",   label: "Properties" },
   { id: "faq",          label: "FAQ" },
   { id: "contact",      label: "Contact" },
+  { id: "privacy",      label: "Privacy Policy" },
+  { id: "terms",        label: "Terms of Service" },
 ];
 
 const SEO_FIELDS = [
@@ -62,6 +64,7 @@ export default function AdminSEO() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin-page-content-seo", activePage] });
+      qc.invalidateQueries({ queryKey: ["page-content", activePage] });
       toast({ title: "SEO settings saved" });
       setDirty(prev => ({ ...prev, [activePage]: false }));
     },

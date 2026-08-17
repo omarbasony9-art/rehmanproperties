@@ -8,54 +8,68 @@ import { Button } from "@/components/ui/button";
 import { ArrowRight } from "lucide-react";
 import { useSEO } from "@/hooks/use-seo";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { usePageContent } from "@/hooks/use-page-content";
+
+// Full detailed steps shown as fallback / additional content
+const DETAIL_STEPS = [
+  {
+    title: "Tell us about your property",
+    desc: "Submit your address and answer a few initial questions about the property's condition and your current situation.",
+  },
+  {
+    title: "Submit property details",
+    desc: "Fill out the inquiry form with details about bedrooms, bathrooms, overall condition, and your reason for selling.",
+  },
+  {
+    title: "Upload photos if desired",
+    desc: "This step is optional, but providing current photos helps our team understand the property better and evaluate it faster.",
+  },
+  {
+    title: "Rehman INC reviews the property",
+    desc: "Our team evaluates the property's location, current condition, market factors, and required repairs.",
+  },
+  {
+    title: "We contact the homeowner",
+    desc: "We will reach out to you using your preferred contact method within a reasonable timeframe to discuss the property.",
+  },
+  {
+    title: "Discuss an offer if the property is a fit",
+    desc: "If the property aligns with our criteria, we'll have a straightforward conversation about a cash offer with no obligation.",
+  },
+  {
+    title: "Flexible next steps",
+    desc: "If you choose to accept, we can close on your timeline. We work around your schedule to make the transition as smooth as possible.",
+  },
+];
 
 export default function HowItWorksPage() {
+  const content = usePageContent("how-it-works");
   useSEO(
-    "How It Works | Rehman INC",
-    "Learn about our straightforward process for buying your property directly. No agents, no showings, no obligations."
+    content.seoTitle || "How It Works | Rehman INC",
+    content.seoDescription || "Learn about our straightforward process for buying your property directly. No agents, no showings, no obligations.",
+    { ogTitle: content.ogTitle || undefined, ogDescription: content.ogDescription || undefined, ogImage: content.ogImage || undefined }
   );
-  
+
   const [formOpen, setFormOpen] = useState(false);
 
-  const steps = [
-    {
-      title: "Tell us about your property",
-      desc: "Submit your address and answer a few initial questions about the property's condition and your current situation."
-    },
-    {
-      title: "Submit property details",
-      desc: "Fill out the inquiry form with details about bedrooms, bathrooms, overall condition, and your reason for selling."
-    },
-    {
-      title: "Upload photos if desired",
-      desc: "This step is optional, but providing current photos helps our team understand the property better and evaluate it faster."
-    },
-    {
-      title: "Rehman INC reviews the property",
-      desc: "Our team evaluates the property's location, current condition, market factors, and required repairs."
-    },
-    {
-      title: "We contact the homeowner",
-      desc: "We will reach out to you using your preferred contact method within a reasonable timeframe to discuss the property."
-    },
-    {
-      title: "Discuss an offer if the property is a fit",
-      desc: "If the property aligns with our criteria, we'll have a straightforward conversation about a cash offer with no obligation."
-    },
-    {
-      title: "Flexible next steps",
-      desc: "If you choose to accept, we can close on your timeline. We work around your schedule to make the transition as smooth as possible."
-    }
-  ];
+  // Use CMS steps if all three are filled; otherwise fall back to the 7-step list
+  const hasCmsSteps = content.step1Title && content.step2Title && content.step3Title;
+  const steps = hasCmsSteps
+    ? [
+        { title: content.step1Title, desc: content.step1Body },
+        { title: content.step2Title, desc: content.step2Body },
+        { title: content.step3Title, desc: content.step3Body },
+      ]
+    : DETAIL_STEPS;
 
   return (
     <div className="min-h-screen bg-background text-foreground">
       <Navbar onOpenForm={() => setFormOpen(true)} />
-      
+
       <EditorialPageHero
-        eyebrow="The Process"
-        title="A Straightforward Way to Sell."
-        description="From the first property details to the final conversation, we keep the process clear and direct."
+        eyebrow={content.heroEyebrow}
+        title={content.heroHeadline}
+        description={content.heroSubtext}
         ctaLabel="Start With Your Property"
         onCtaClick={() => setFormOpen(true)}
         bgImage={`${import.meta.env.BASE_URL}hero-home.jpg`}
@@ -71,7 +85,7 @@ export default function HowItWorksPage() {
               Get My Cash Offer
             </Button>
           </div>
-          
+
           <div className="space-y-12 relative before:absolute before:inset-0 before:ml-[28px] md:before:ml-[34px] before:-translate-x-px md:before:translate-x-0 before:h-full before:w-0.5 before:bg-border/60">
             {steps.map((step, i) => (
               <div key={i} className="relative flex items-start gap-6 md:gap-10">
@@ -101,7 +115,7 @@ export default function HowItWorksPage() {
             <h2 className="font-serif text-3xl md:text-4xl font-bold mb-4">Common Questions</h2>
             <p className="text-muted-foreground">A few things property owners often ask us.</p>
           </div>
-          
+
           <Accordion type="single" collapsible className="w-full space-y-4 mb-12">
             <AccordionItem value="q1" className="border border-border rounded-lg px-6 bg-card">
               <AccordionTrigger className="text-left font-serif text-lg py-5 hover:no-underline hover:text-primary transition-colors">
@@ -120,7 +134,7 @@ export default function HowItWorksPage() {
               </AccordionContent>
             </AccordionItem>
           </Accordion>
-          
+
           <div className="text-center">
             <Button variant="outline" size="lg" asChild>
               <Link href="/faq">View All FAQs</Link>
@@ -136,9 +150,9 @@ export default function HowItWorksPage() {
           <p className="text-primary-foreground/80 mb-8 max-w-xl mx-auto text-lg">
             No pressure, no obligation. See if your property is a good fit.
           </p>
-          <Button 
-            size="lg" 
-            onClick={() => setFormOpen(true)} 
+          <Button
+            size="lg"
+            onClick={() => setFormOpen(true)}
             className="bg-background text-foreground hover:bg-background/90 h-14 px-10 text-lg shadow-lg"
           >
             Get My Cash Offer
@@ -147,7 +161,7 @@ export default function HowItWorksPage() {
       </section>
 
       <Footer />
-      
+
       <MultiStepForm open={formOpen} onOpenChange={setFormOpen} />
     </div>
   );

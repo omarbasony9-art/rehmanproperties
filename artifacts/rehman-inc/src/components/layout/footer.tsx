@@ -1,10 +1,19 @@
 import { Link } from "wouter";
 import { Instagram, Mail, Phone } from "lucide-react";
-
-const INSTAGRAM_URL =
-  "https://www.instagram.com/ali_monopoly/?utm_source=ig_web_button_share_sheet";
+import { useSiteConfig, instagramHandle, phoneHref } from "@/hooks/use-site-config";
+import { usePageContent } from "@/hooks/use-page-content";
 
 export function Footer() {
+  const cfg = useSiteConfig();
+  const footer = usePageContent("footer");
+
+  const igHandle = instagramHandle(cfg.instagram_url);
+  const copyright = footer.copyright || `© ${new Date().getFullYear()} ${cfg.company_name}. All rights reserved.`;
+  const disclaimer = footer.disclaimer || "Rehman INC does not provide legal, tax, or financial advice.";
+  const tagline =
+    footer.tagline ||
+    "We provide straightforward, no-obligation cash offers for properties in any condition. Skip the repairs, showings, and uncertainty of a traditional sale.";
+
   return (
     <footer className="bg-foreground text-background py-16">
       <div className="container mx-auto px-4 md:px-6">
@@ -13,46 +22,52 @@ export function Footer() {
           {/* Brand + contact */}
           <div className="md:col-span-2">
             <span className="font-serif text-2xl font-bold tracking-wider uppercase mb-4 block">
-              Rehman INC
+              {cfg.company_name}
             </span>
             <p className="text-background/70 max-w-md mb-6 leading-relaxed">
-              We provide straightforward, no-obligation cash offers for properties in any condition. Skip the repairs, showings, and uncertainty of a traditional sale.
+              {tagline}
             </p>
 
             {/* Contact details */}
             <div className="space-y-3 text-sm text-background/70 mb-6">
-              <p className="font-semibold text-background/90 text-base">Ali Rehman</p>
+              {cfg.contact_name && (
+                <p className="font-semibold text-background/90 text-base">{cfg.contact_name}</p>
+              )}
 
-              <a
-                href="tel:+16095821061"
-                className="flex items-center gap-2 hover:text-secondary transition-colors"
-              >
-                <Phone className="w-4 h-4 shrink-0" />
-                609-582-1061
-              </a>
+              {cfg.contact_phone && (
+                <a
+                  href={phoneHref(cfg.contact_phone)}
+                  className="flex items-center gap-2 hover:text-secondary transition-colors"
+                >
+                  <Phone className="w-4 h-4 shrink-0" />
+                  {cfg.contact_phone}
+                </a>
+              )}
 
-              <a
-                href="mailto:Aliproperties91@gmail.com"
-                className="flex items-center gap-2 hover:text-secondary transition-colors"
-              >
-                <Mail className="w-4 h-4 shrink-0" />
-                Aliproperties91@gmail.com
-              </a>
+              {cfg.contact_email && (
+                <a
+                  href={`mailto:${cfg.contact_email}`}
+                  className="flex items-center gap-2 hover:text-secondary transition-colors"
+                >
+                  <Mail className="w-4 h-4 shrink-0" />
+                  {cfg.contact_email}
+                </a>
+              )}
 
-              <a
-                href={INSTAGRAM_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 hover:text-secondary transition-colors"
-              >
-                <Instagram className="w-4 h-4 shrink-0" />
-                @ali_monopoly
-              </a>
+              {cfg.instagram_url && (
+                <a
+                  href={cfg.instagram_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 hover:text-secondary transition-colors"
+                >
+                  <Instagram className="w-4 h-4 shrink-0" />
+                  {igHandle}
+                </a>
+              )}
             </div>
 
-            <p className="text-xs text-background/40">
-              Disclaimer: Rehman INC does not provide legal, tax, or financial advice.
-            </p>
+            <p className="text-xs text-background/40">{disclaimer}</p>
           </div>
 
           {/* Explore links */}
@@ -81,18 +96,18 @@ export function Footer() {
 
         {/* Bottom bar */}
         <div className="border-t border-background/10 pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
-          <p className="text-background/50 text-sm">
-            &copy; {new Date().getFullYear()} Rehman INC. All rights reserved.
-          </p>
-          <a
-            href={INSTAGRAM_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-2 text-background/50 text-sm hover:text-secondary transition-colors"
-          >
-            <Instagram className="w-4 h-4" />
-            @ali_monopoly
-          </a>
+          <p className="text-background/50 text-sm">{copyright}</p>
+          {cfg.instagram_url && (
+            <a
+              href={cfg.instagram_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 text-background/50 text-sm hover:text-secondary transition-colors"
+            >
+              <Instagram className="w-4 h-4" />
+              {igHandle}
+            </a>
+          )}
         </div>
       </div>
     </footer>

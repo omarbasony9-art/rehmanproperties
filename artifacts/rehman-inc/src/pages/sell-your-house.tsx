@@ -7,13 +7,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ArrowRight, Check } from "lucide-react";
 import { useSEO } from "@/hooks/use-seo";
+import { usePageContent } from "@/hooks/use-page-content";
 
 export default function SellYourHousePage() {
+  const content = usePageContent("sell");
   useSEO(
-    "Sell Your House | Rehman INC",
-    "Request a straightforward cash offer for your property. No repairs, no agents, no showings."
+    content.seoTitle || "Sell Your House | Rehman INC",
+    content.seoDescription || "Request a straightforward cash offer for your property. No repairs, no agents, no showings.",
+    { ogTitle: content.ogTitle || undefined, ogDescription: content.ogDescription || undefined, ogImage: content.ogImage || undefined }
   );
-  
+
   const [formOpen, setFormOpen] = useState(false);
   const [address, setAddress] = useState("");
 
@@ -34,17 +37,17 @@ export default function SellYourHousePage() {
     "Fire or Water Damage",
     "Job Loss or Financial Hardship",
     "Estate Sale",
-    "Ready to Downsize"
+    "Ready to Downsize",
   ];
 
   return (
     <div className="min-h-screen bg-background text-foreground">
       <Navbar onOpenForm={() => setFormOpen(true)} />
-      
+
       <SplitPageHero
-        eyebrow="Sell Directly"
-        title="Sell Your Property Without the Traditional Hassle."
-        description="Tell us about your property and see whether Rehman INC is the right fit for your situation."
+        eyebrow={content.heroEyebrow}
+        title={content.heroHeadline}
+        description={content.heroSubtext}
         image={`${import.meta.env.BASE_URL}property-1.jpg`}
         imageAlt="Residential property"
       >
@@ -70,7 +73,7 @@ export default function SellYourHousePage() {
               "No Repairs Required — As-is purchases, whatever the condition.",
               "No Agent Fees — Keep more of the final offer.",
               "No Showings — Maintain your privacy.",
-              "Flexible Closing — We work on your timeline."
+              "Flexible Closing — We work on your timeline.",
             ].map((benefit, i) => (
               <div key={i} className="flex items-start gap-3 max-w-xs">
                 <Check className="w-5 h-5 text-primary shrink-0 mt-0.5" />
@@ -86,9 +89,11 @@ export default function SellYourHousePage() {
         <div className="container mx-auto px-4 max-w-4xl">
           <div className="mb-12">
             <h2 className="font-serif text-3xl md:text-4xl font-bold mb-4">Situations We Help With</h2>
-            <p className="text-lg text-muted-foreground">Every property and homeowner situation is unique. We have experience working through a wide variety of circumstances.</p>
+            <p className="text-lg text-muted-foreground">
+              Every property and homeowner situation is unique. We have experience working through a wide variety of circumstances.
+            </p>
           </div>
-          
+
           <div className="grid md:grid-cols-2 gap-x-12 gap-y-4">
             {situations.map((sit, i) => (
               <div key={i} className="py-4 border-b border-border text-lg text-foreground/80 font-medium">
@@ -102,14 +107,16 @@ export default function SellYourHousePage() {
       {/* PROMINENT INQUIRY SECTION */}
       <section className="py-32 bg-foreground text-background border-t border-background/10">
         <div className="container mx-auto px-4 text-center max-w-3xl">
-          <h2 className="font-serif text-4xl md:text-5xl font-bold mb-6">Start Your Inquiry</h2>
+          <h2 className="font-serif text-4xl md:text-5xl font-bold mb-6">
+            {content.formTitle}
+          </h2>
           <p className="text-xl text-background/70 mb-12">
-            It takes just a few minutes to provide the details we need to begin our review.
+            {content.formSubtitle}
           </p>
-          
+
           <form onSubmit={handleGetStarted} className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Input 
-              placeholder="Your property address..." 
+            <Input
+              placeholder="Your property address..."
               className="h-16 text-lg bg-background text-foreground border-0 max-w-md w-full focus-visible:ring-2 focus-visible:ring-primary"
               value={address}
               onChange={(e) => setAddress(e.target.value)}
@@ -125,7 +132,7 @@ export default function SellYourHousePage() {
       <section className="py-24 bg-background">
         <div className="container mx-auto px-4 max-w-5xl text-center">
           <h2 className="font-serif text-3xl md:text-4xl font-bold mb-16">What to Expect</h2>
-          
+
           <div className="grid md:grid-cols-3 gap-12">
             <div>
               <div className="text-4xl font-serif text-primary/30 font-bold mb-4">1</div>
@@ -151,19 +158,19 @@ export default function SellYourHousePage() {
         <div className="container mx-auto px-4 text-center">
           <h2 className="font-serif text-4xl font-bold text-primary-foreground mb-4">Ready To Talk?</h2>
           <p className="text-primary-foreground/80 mb-8 max-w-xl mx-auto">No pressure, no obligation.</p>
-          <Button size="lg" onClick={() => setFormOpen(true)} className="bg-background text-foreground hover:bg-background/90 h-14 px-10 text-lg">
+          <Button
+            size="lg"
+            onClick={() => setFormOpen(true)}
+            className="bg-background text-foreground hover:bg-background/90 h-14 px-10 text-lg"
+          >
             Get My Cash Offer
           </Button>
         </div>
       </section>
 
       <Footer />
-      
-      <MultiStepForm 
-        open={formOpen} 
-        onOpenChange={setFormOpen} 
-        initialAddress={address}
-      />
+
+      <MultiStepForm open={formOpen} onOpenChange={setFormOpen} initialAddress={address} />
     </div>
   );
 }

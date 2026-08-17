@@ -34,6 +34,7 @@ export default function AdminFaqs() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin-faqs"] });
+      qc.invalidateQueries({ queryKey: ["site-faqs"] });
       toast({ title: editing ? "FAQ updated" : "FAQ created" });
       setEditing(null); setCreating(false); setForm({ question: "", answer: "", published: true });
     },
@@ -42,7 +43,7 @@ export default function AdminFaqs() {
 
   const deleteMutation = useMutation({
     mutationFn: deleteFaq,
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["admin-faqs"] }); toast({ title: "FAQ deleted" }); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["admin-faqs"] }); qc.invalidateQueries({ queryKey: ["site-faqs"] }); toast({ title: "FAQ deleted" }); },
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
@@ -57,12 +58,12 @@ export default function AdminFaqs() {
         updateFaq(sorted[swapIdx].id, { sortOrder: idx }),
       ]);
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin-faqs"] }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["admin-faqs"] }); qc.invalidateQueries({ queryKey: ["site-faqs"] }); },
   });
 
   const togglePublish = useMutation({
     mutationFn: (faq: Faq) => updateFaq(faq.id, { published: !faq.published }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin-faqs"] }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["admin-faqs"] }); qc.invalidateQueries({ queryKey: ["site-faqs"] }); },
   });
 
   if (meLoading) return <div className="min-h-screen flex items-center justify-center"><Loader2 className="w-6 h-6 animate-spin" /></div>;

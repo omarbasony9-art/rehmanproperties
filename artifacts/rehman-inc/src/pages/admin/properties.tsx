@@ -46,6 +46,7 @@ export default function AdminProperties() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin-properties"] });
+      qc.invalidateQueries({ queryKey: ["site-properties"] });
       toast({ title: editing ? "Property updated" : "Property created" });
       setEditing(null); setCreating(false); setForm(emptyForm());
     },
@@ -54,7 +55,7 @@ export default function AdminProperties() {
 
   const deleteMutation = useMutation({
     mutationFn: deleteProperty,
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["admin-properties"] }); toast({ title: "Property deleted" }); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["admin-properties"] }); qc.invalidateQueries({ queryKey: ["site-properties"] }); toast({ title: "Property deleted" }); },
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 

@@ -53,6 +53,7 @@ export default function AdminContactInfo() {
     mutationFn: () => saveSiteSettings(Object.fromEntries(FIELDS.map(f => [f.key, form[f.key] ?? ""]))),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin-site-settings"] });
+      qc.invalidateQueries({ queryKey: ["site-config"] });
       toast({ title: "Contact information saved" });
       setDirty(false);
     },
