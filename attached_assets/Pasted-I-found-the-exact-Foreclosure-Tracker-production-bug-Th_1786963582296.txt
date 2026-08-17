@@ -1,0 +1,96 @@
+I found the exact Foreclosure Tracker production bug.
+
+The live browser is currently requesting:
+
+https://therehmanproperties.com/foreclosure-tracker/api/foreclosures?page=1&limit=50&sortBy=upset&sortDir=asc
+
+That is WRONG.
+
+The tracker API must be called from the root of the domain:
+
+/api/foreclosures?page=1&limit=50&sortBy=upset&sortDir=asc
+
+The problem is almost certainly that the frontend uses a relative URL like:
+
+api/foreclosures
+
+instead of:
+
+/api/foreclosures
+
+Because the frontend page is /foreclosure-tracker, the browser is incorrectly resolving the relative URL to:
+
+/foreclosure-tracker/api/foreclosures
+
+Fix ALL Foreclosure Tracker production API calls so they use root-relative same-origin URLs beginning with:
+
+/api/
+
+Inspect the entire foreclosure tracker frontend and fix every affected request, including any requests for:
+
+- foreclosures
+- foreclosure stats
+- health
+- sync / refresh
+- listing details
+- valuation
+- Zillow
+- Redfin
+- watch list
+- any other tracker API
+
+For example:
+
+WRONG:
+fetch("api/foreclosures")
+
+CORRECT:
+fetch("/api/foreclosures")
+
+WRONG:
+fetch(`api/foreclosures?page=${page}`)
+
+CORRECT:
+fetch(`/api/foreclosures?page=${page}`)
+
+Do not hardcode therehmanproperties.com.
+Use root-relative /api/... URLs so it works on both Cloudflare and development.
+
+Keep:
+
+credentials: "include"
+
+for authenticated admin requests.
+
+Also inspect the Cloudflare Hono backend and make sure the corresponding route exists for:
+
+GET /api/foreclosures
+
+with the query parameters currently used by the frontend:
+
+page
+limit
+sortBy
+sortDir
+county
+and any existing filters.
+
+IMPORTANT:
+The bad /foreclosure-tracker/api/... URL currently returns HTTP 200 because the SPA fallback is returning index.html. That is NOT a successful API response.
+
+The correct /api/foreclosures route must return JSON.
+
+Do not redesign anything.
+Do not change secrets.
+Do not create another server.
+Do not push to GitHub yet.
+
+After fixing it:
+
+1. Run the production build.
+2. Run TypeScript checks.
+3. Search the tracker frontend for any remaining relative "api/" URLs without the leading slash.
+4. Tell me the exact corrected listings URL.
+5. Tell me which files you changed.
+
+DO NOT push to GitHub. I will push manually.

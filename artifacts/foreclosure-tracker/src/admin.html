@@ -230,26 +230,31 @@ async function init() {
 
 async function loadHealth() {
   try {
-    const r = await fetch(`${BASE}/api/health`);
+    // /api/foreclosures/stats returns { atlantic, capeMay, extreme, major, strong, under280, lastUpdated }
+    const r = await fetch(`${BASE}/api/foreclosures/stats`, { credentials: 'include' });
+    if (!r.ok) { console.error('[health] HTTP', r.status, await r.text()); return; }
     const d = await r.json();
-    document.getElementById('statTotal').textContent = d.listingCount ?? '—';
-    document.getElementById('statRefresh').textContent = d.lastRefresh
-      ? new Date(d.lastRefresh).toLocaleString('en-US', {timeZone:'America/New_York'})
+    document.getElementById('statTotal').textContent = (d.atlantic ?? 0) + (d.capeMay ?? 0);
+    document.getElementById('statRefresh').textContent = d.lastUpdated
+      ? new Date(d.lastUpdated).toLocaleString('en-US', {timeZone:'America/New_York'})
       : 'Never';
-  } catch(e) { console.error(e); }
+  } catch(e) { console.error('[health]', e); }
 }
 
 async function loadForeclosures() {
   try {
     // Load all (up to 1000) for client-side filtering
-    const r = await fetch(`${BASE}/api/foreclosures?limit=1000`);
+    // New API: GET /api/foreclosures/listings?limit=1000  →  { rows: [...], total: N }
+    const r = await fetch(`${BASE}/api/foreclosures/listings?limit=1000`, { credentials: 'include' });
+    if (!r.ok) { console.error('[listings] HTTP', r.status, await r.text()); throw new Error(`HTTP ${r.status}`); }
     const d = await r.json();
-    allData = d.items || [];
+    allData = d.rows || d.items || [];
     updateStats();
     render();
   } catch(e) {
+    console.error('[listings]', e);
     document.getElementById('tableBody').innerHTML =
-      '<tr><td colspan="11" class="empty">Failed to load data. Is the server running?</td></tr>';
+      '<tr><td colspan="11" class="empty">Unable to load foreclosure listings.</td></tr>';
   }
 }
 
@@ -358,8 +363,8 @@ function render() {
 // ── Detail Modal ──────────────────────────────────────────────────────────────
 async function openModal(sheriffNumber) {
   try {
-    const r = await fetch(`${BASE}/api/foreclosures/${encodeURIComponent(sheriffNumber)}`);
-    if (!r.ok) { showToast('Failed to load detail'); return; }
+    const r = await fetch(`${BASE}/api/foreclosures/listings/${encodeURIComponent(sheriffNumber)}`, { credentials: 'include' });
+    if (!r.ok) { console.error('[detail] HTTP', r.status, await r.text()); showToast('Failed to load detail'); return; }
     const x = await r.json();
 
     const fullAddr = [x.address, x.city, x.state, x.zipCode].filter(Boolean).join(', ');
@@ -448,23 +453,25 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModalDi
 
 // ── Refresh ───────────────────────────────────────────────────────────────────
 async function triggerRefresh() {
-  const secret = prompt('Enter REFRESH_SECRET to trigger a scrape:');
-  if (!secret) return;
+  if (!confirm('Run a full CivilView scrape for both Atlantic and Cape May counties? This can take up to 30 seconds.')) return;
   const btn = document.getElementById('refreshBtn');
   btn.disabled = true; btn.textContent = '↻ Refreshing…';
   try {
-    const r = await fetch(`${BASE}/api/refresh`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${secret}` },
-    });
-    if (r.ok) {
-      showToast('Refresh started — data will update in a moment.');
-      setTimeout(() => { loadHealth(); loadForeclosures(); }, 15000);
+    // Sync both counties via the Cloudflare API (requires admin session cookie)
+    const [ra, rc] = await Promise.all([
+      fetch(`${BASE}/api/foreclosures/sync/atlantic`,  { method: 'POST', credentials: 'include' }),
+      fetch(`${BASE}/api/foreclosures/sync/cape-may`,  { method: 'POST', credentials: 'include' }),
+    ]);
+    if (ra.ok && rc.ok) {
+      showToast('Sync complete — reloading data…');
+      await Promise.all([loadHealth(), loadForeclosures()]);
     } else {
-      const d = await r.json().catch(() => ({}));
-      showToast('Error: ' + (d.error || r.statusText));
+      const msg = !ra.ok ? `Atlantic: HTTP ${ra.status}` : `Cape May: HTTP ${rc.status}`;
+      console.error('[sync]', msg);
+      showToast('Sync error: ' + msg + ' — are you logged into the admin panel?');
     }
   } catch(e) {
+    console.error('[sync]', e);
     showToast('Network error: ' + e.message);
   } finally {
     btn.disabled = false; btn.textContent = '↻ Refresh Data';

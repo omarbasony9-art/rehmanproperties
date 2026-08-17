@@ -1073,6 +1073,46 @@ async function ensureFcSchema(env: Env): Promise<void> {
   fcSchemaReady = true;
 }
 
+// ── Sort-column compat map: old sortBy names → D1 column names ───────────────
+const FC_SORT_COMPAT: Record<string, string> = {
+  upset: "upset_amount", upset_amount: "upset_amount",
+  score: "deal_score",   deal_score: "deal_score",
+  date:  "current_sale_date", current_sale_date: "current_sale_date",
+  rating:"deal_rating",  deal_rating: "deal_rating",
+  spread:"estimated_spread", estimated_spread: "estimated_spread",
+  discount: "discount_percent", discount_percent: "discount_percent",
+  market: "market_value_used", market_value_used: "market_value_used",
+  sheriff: "sheriff_number", sheriff_number: "sheriff_number",
+};
+
+// GET /api/foreclosures — backward-compat alias for /api/foreclosures/listings
+// Accepts old-style params: page, limit, sortBy, sortDir, county, rating, maxUpset
+// as well as new-style params: sort, order, offset, deal, upsetMax
+app.get("/foreclosures", async (c) => {
+  await ensureFcSchema(c.env);
+  const q = c.req.query();
+
+  // Map old-style → new-style params
+  const rawSort   = q.sortBy ?? q.sort ?? "upset_amount";
+  const sort      = FC_SORT_COMPAT[rawSort] ?? "upset_amount";
+  const order     = (q.sortDir ?? q.order ?? "asc").toLowerCase() === "desc" ? "desc" : "asc";
+  const limit     = Math.min(parseInt(q.limit ?? "50", 10) || 50, 1000);
+  const page      = Math.max(parseInt(q.page ?? "1", 10) || 1, 1);
+  const offset    = q.offset != null ? parseInt(q.offset, 10) || 0 : (page - 1) * limit;
+  const deal      = q.rating ?? q.deal;
+  const upsetMaxRaw = q.maxUpset ?? q.upsetMax;
+  const upsetMax  = upsetMaxRaw != null ? (parseFloat(upsetMaxRaw) || undefined) : undefined;
+  const county    = q.county;
+  const search    = q.search;
+
+  try {
+    const result = await queryListings(c.env.DB, { sort, order, limit, offset, deal, upsetMax, county, search });
+    return c.json(result);
+  } catch (err) {
+    return c.json({ error: err instanceof Error ? err.message : String(err) }, 500);
+  }
+});
+
 // GET /api/foreclosures/listings — public (no auth required)
 app.get("/foreclosures/listings", async (c) => {
   await ensureFcSchema(c.env);
