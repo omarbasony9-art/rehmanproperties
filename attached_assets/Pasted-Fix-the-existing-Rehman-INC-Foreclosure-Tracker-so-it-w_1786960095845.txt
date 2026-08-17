@@ -1,0 +1,532 @@
+Fix the existing **Rehman INC Foreclosure Tracker** so it works on the live Cloudflare website.
+
+DO NOT redesign the tracker.
+DO NOT remove existing functionality.
+DO NOT break the public Rehman INC website, admin, inquiries, properties, SEO, or email system.
+
+CURRENT PROBLEM:
+
+On the live admin Foreclosure Tracker → Listings page I get:
+
+`Unable to load listings.`
+
+`Check that the Foreclosure Tracker service is running.`
+
+The production website is now hosted on Cloudflare Pages/Functions.
+
+I do NOT want the Foreclosure Tracker to depend on a separate Replit server being continuously online.
+
+# FIRST — FIND THE ACTUAL FAILURE
+
+Inspect the Foreclosure Tracker frontend and determine:
+
+* Which API endpoint the Listings page calls
+* Whether it points to localhost
+* Whether it points to a Replit URL
+* Whether it points to an Express API server
+* Whether the route exists in Cloudflare Pages Functions
+* What HTTP status/error the production request currently returns
+
+Fix the actual problem rather than hiding the error message.
+
+---
+
+# CLOUDFLARE PRODUCTION REQUIREMENT
+
+Make the Foreclosure Tracker work through the existing Cloudflare backend.
+
+Production should use same-origin routes such as:
+
+`/api/foreclosures/listings`
+
+`/api/foreclosures/stats`
+
+`/api/foreclosures/sync`
+
+`/api/foreclosures/listings/:id`
+
+or equivalent clean routes.
+
+The browser should NOT need to contact:
+
+* localhost
+* a Replit development URL
+* a permanently running Express server
+* a second manually hosted tracker service
+
+Use the existing Cloudflare Pages Functions architecture.
+
+---
+
+# IMPORTANT ARCHITECTURE
+
+The Listings page should primarily load saved listings from **Cloudflare D1**.
+
+Do NOT scrape CivilView every single time someone opens the admin Listings page.
+
+Correct flow:
+
+CivilView / valuation sources
+→ Sync process
+→ D1 database
+→ Admin Listings table
+
+This makes the tracker much faster and more reliable.
+
+When I open Listings:
+
+1. Read saved foreclosure records from D1.
+2. Return them immediately.
+3. Apply county/filter/sort options.
+4. Do not wait for CivilView or Zillow/Redfin lookups.
+
+---
+
+# DATABASE
+
+Create/upgrade D1 tables needed for the Foreclosure Tracker.
+
+Do NOT drop any existing production tables.
+
+Use safe migrations.
+
+Foreclosure records should contain fields such as:
+
+* id
+* county
+* sheriff_number
+* civilview_id
+* source_url
+* sale_date
+* status
+* plaintiff
+* defendant
+* address
+* city
+* state
+* zip
+* foreclosure_type
+* upset_amount
+* zillow_value
+* redfin_value
+* market_value
+* spread
+* discount_percent
+* warning_count
+* warning_details
+* zillow_status
+* redfin_status
+* detail_status
+* created_at
+* updated_at
+* last_synced_at
+
+Use the existing field names if similar columns already exist.
+
+Do not unnecessarily duplicate tables.
+
+---
+
+# COUNTY SUPPORT
+
+Keep the existing County dropdown in:
+
+**Admin → Foreclosure Tracker → Listings**
+
+Options:
+
+* All Counties
+* Atlantic County
+* Cape May County
+
+Atlantic and Cape May records must both work.
+
+Cape May source:
+
+`https://salesweb.civilview.com/Sales/SalesSearch?countyId=52`
+
+Keep the existing Atlantic County source.
+
+Store county explicitly on every record.
+
+---
+
+# LISTINGS API
+
+The production listings API must support:
+
+* County
+* Search
+* Status
+* Deal category
+* Sorting
+* Pagination
+
+Example:
+
+`GET /api/foreclosures/listings?county=Cape%20May&page=1&limit=50&sort=upset_amount&direction=asc`
+
+Return JSON from D1.
+
+Do NOT load every row just to filter it in the browser if server-side filtering can be used.
+
+---
+
+# UPSET SORT
+
+Keep the default listing order:
+
+**Lowest UPSET → Highest UPSET**
+
+Sort numerically.
+
+Example:
+
+$10,000
+$15,000
+$47,768
+$70,000
+$95,000
+
+Missing/null UPSET amounts should appear after valid amounts.
+
+Do NOT alphabetically sort currency strings.
+
+---
+
+# TABS
+
+Keep all existing tracker tabs working:
+
+* All Listings
+* Under $280K
+* Extreme Deals
+* Major Deals
+* Strong Deals
+* Unknown Valuation
+
+The County dropdown must filter every applicable tab.
+
+Example:
+
+County = Cape May County
+Tab = Under $280K
+
+Result:
+
+Only Cape May County listings qualifying for that tab.
+
+---
+
+# ATLANTIC + CAPE MAY SYNC
+
+Create authenticated admin sync routes.
+
+Examples:
+
+`POST /api/foreclosures/sync/atlantic`
+
+`POST /api/foreclosures/sync/cape-may`
+
+or equivalent.
+
+Do not automatically hammer CivilView whenever the page loads.
+
+Add a button:
+
+**Refresh Listings**
+
+If county = Atlantic:
+refresh Atlantic.
+
+If county = Cape May:
+refresh Cape May.
+
+If county = All Counties:
+allow refreshing both safely.
+
+---
+
+# CIVILVIEW SCRAPER
+
+Reuse the working CivilView scraper logic.
+
+CivilView requires session handling.
+
+For each county:
+
+1. Load search page.
+2. Establish cookie/session.
+3. Parse listings.
+4. Follow View Details links with same session.
+5. Extract detail values.
+6. Update D1.
+
+Do not mistake:
+
+`View Details`
+
+for the Sheriff's number.
+
+Use reliable column/label mapping.
+
+---
+
+# CAPE MAY
+
+Preserve the Cape May fixes already requested.
+
+Make sure Cape May correctly populates:
+
+* UPSET
+* Zillow
+* Redfin
+* Market Value
+* Spread
+* DISC %
+* Warnings
+
+Do not make up missing values.
+
+Use:
+
+`—`
+
+for data that could not be confidently obtained.
+
+---
+
+# ZILLOW / REDFIN
+
+IMPORTANT:
+
+Check how the existing Zillow and Redfin integrations are currently configured.
+
+If their API credentials only exist in Replit Secrets, Cloudflare production will NOT automatically have them.
+
+Identify every required environment variable.
+
+Do NOT expose API keys in frontend JavaScript.
+
+Server-side only.
+
+At the end, tell me exactly which Zillow/Redfin environment variables still need to be added to:
+
+**Cloudflare → rehmanproperties → Settings → Variables and Secrets**
+
+Do not print the secret values.
+
+Only print the variable names.
+
+---
+
+# VALUATION PIPELINE
+
+After CivilView gives an address:
+
+1. Normalize address.
+2. Query existing Zillow integration.
+3. Validate Zillow address match.
+4. Query existing Redfin integration.
+5. Validate Redfin address match.
+6. Calculate Market Value.
+7. Calculate Spread.
+8. Calculate DISC %.
+9. Calculate warnings.
+10. Save everything to D1.
+
+Do not rerun those API calls whenever the admin table renders.
+
+Use saved values.
+
+---
+
+# SPREAD
+
+Keep:
+
+`Spread = Market Value - Upset Amount`
+
+Use numbers internally.
+
+---
+
+# DISCOUNT %
+
+Keep the currently intended formula consistently.
+
+If the project currently uses:
+
+`(Market Value - Upset Amount) / Market Value * 100`
+
+continue using that.
+
+Do not calculate if required values are missing.
+
+---
+
+# REFRESH STATUS
+
+When Refresh Listings is running, show:
+
+**Refreshing Cape May County...**
+
+or:
+
+**Refreshing Atlantic County...**
+
+When complete show a summary:
+
+* Listings found
+* New listings
+* Updated listings
+* UPSET values found
+* Zillow matches
+* Redfin matches
+* Failed detail pages
+
+Do not freeze the whole admin dashboard.
+
+---
+
+# ERROR HANDLING
+
+Replace the current generic:
+
+`Check that the Foreclosure Tracker service is running`
+
+message.
+
+The tracker should no longer depend on a separately running service.
+
+If the Listings API fails, show a meaningful error such as:
+
+`Unable to load saved foreclosure listings.`
+
+Log the actual server-side reason.
+
+Do not expose secrets or stack traces to the browser.
+
+---
+
+# AUTHENTICATION
+
+All Foreclosure Tracker admin APIs must use the existing Rehman INC admin authentication.
+
+Require a valid admin session for:
+
+* Listings
+* Sync
+* Watch List
+* Tracker settings
+* Debug information
+
+Continue using the existing:
+
+`admin_token`
+
+session system.
+
+Use:
+
+`credentials: "include"`
+
+on frontend admin requests.
+
+---
+
+# PERFORMANCE
+
+The tracker should feel fast.
+
+Opening Listings should query D1 only.
+
+Do not run:
+
+* CivilView scraping
+* Zillow requests
+* Redfin requests
+
+during normal page loading.
+
+Use indexes on useful D1 fields such as:
+
+* county
+* upset_amount
+* sale_date
+* sheriff_number
+* status
+* market_value
+* discount_percent
+
+---
+
+# KEEP IT CHEAP
+
+Do not add:
+
+* another paid database
+* another hosting server
+* Supabase
+* Firebase
+* AWS
+* another Replit deployment
+* a paid queue
+* unnecessary services
+
+Use:
+
+* Cloudflare Pages
+* Pages Functions
+* D1
+* Existing external APIs
+
+Keep it within the current cheap/free architecture.
+
+---
+
+# PRODUCTION TEST
+
+Test against the actual Cloudflare architecture.
+
+Verify:
+
+1. `/api/foreclosures/listings` exists.
+2. Logged-in admin can access it.
+3. It returns D1 data.
+4. Listings page loads.
+5. County dropdown works.
+6. Atlantic listings work.
+7. Cape May listings work.
+8. UPSET sorts lowest → highest.
+9. Under $280K works.
+10. Extreme Deals works.
+11. Major Deals works.
+12. Strong Deals works.
+13. Unknown Valuation works.
+14. Refresh Listings works.
+15. CivilView sync updates D1.
+16. Zillow values persist.
+17. Redfin values persist.
+18. Market Value persists.
+19. Spread persists.
+20. DISC % persists.
+21. Watch List still works.
+22. Admin auth still works.
+23. Production build passes.
+24. Cloudflare Functions typecheck passes.
+
+Most importantly:
+
+**Opening the Foreclosure Tracker must NOT require a Replit server to be running.**
+
+Make it fully functional from the Cloudflare-hosted Rehman INC website.
+
+After fixing it, tell me:
+
+1. The exact reason it was failing.
+2. Which production API route now loads listings.
+3. Any environment variable names I still need to add to Cloudflare.
+4. Whether a D1 migration is required.
+
+Do the actual implementation now.
