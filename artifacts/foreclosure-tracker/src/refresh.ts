@@ -10,7 +10,7 @@ import pLimit from "p-limit";
 import { query } from "./db.js";
 import { fetchListPage, fetchDetailPage, type ListingStub, type DetailedListing } from "./scraper.js";
 import { classify } from "./classifier.js";
-import { scoreDeal, computeWarnings } from "./deals.js";
+import { computeWarnings } from "./deals.js";
 import { lookupValuation } from "./valuation.js";
 
 const limit = pLimit(3);
@@ -125,38 +125,20 @@ export async function runRefresh(): Promise<RefreshResult> {
           const upsetOk = detail.upsetAmount != null && detail.upsetAmount <= VALUATION_UPSET_THRESHOLD;
           if (upsetOk && detail.address && detail.city && detail.state && detail.zipCode) {
             try {
-              const val = await lookupValuation(
+              const outcome = await lookupValuation(
                 detail.sheriffNumber,
                 detail.address,
                 detail.city,
                 detail.state,
                 detail.zipCode,
               );
-
-              if (val?.estimatedMarketValue) {
-                const metrics  = scoreDeal(detail.upsetAmount, val.estimatedMarketValue);
-                const warnings = computeWarnings({
-                  priorsLiensTaxes: detail.priorsLiensTaxes,
-                  upsetAmount: detail.upsetAmount,
-                  estimatedMarketValue: val.estimatedMarketValue,
-                  occupancyStatus: detail.occupancyStatus,
-                  propertyValuationAvailable: true,
-                });
-
-                await query(
-                  `UPDATE foreclosures SET
-                     deal_rating=$1, deal_score=$2, estimated_spread=$3,
-                     discount_percent=$4, equity_multiple=$5, deal_warnings=$6,
-                     last_updated=NOW()
-                   WHERE sheriff_number=$7`,
-                  [
-                    metrics.dealRating, metrics.dealScore, metrics.estimatedSpread,
-                    metrics.discountPercent, metrics.equityMultiple, warnings,
-                    detail.sheriffNumber,
-                  ],
+              if (outcome === "fetched") {
+                // Check if it became a watchlist deal after scoring
+                const [scored] = await query<{ deal_rating: string }>(
+                  `SELECT deal_rating FROM foreclosures WHERE sheriff_number=$1`,
+                  [detail.sheriffNumber],
                 );
-
-                if (["EXTREME", "MAJOR", "STRONG"].includes(metrics.dealRating)) {
+                if (scored && ["EXTREME","MAJOR","STRONG"].includes(scored.deal_rating)) {
                   result.majorDealsFound++;
                 }
               }
@@ -261,13 +243,14 @@ async function upsertStub(stub: ListingStub, exists: boolean): Promise<void> {
 async function upsertForeclosure(d: DetailedListing, isNew: boolean): Promise<void> {
   const classif = classify(d.plaintiff, d.defendant, d.priorsLiensTaxes, d.propertyNotes);
 
-  // Initial score without market value — always UNKNOWN until valuation
+  // Initial warnings without market value — recalculateDeal() will update after valuation
   const warnings = computeWarnings({
     priorsLiensTaxes: d.priorsLiensTaxes,
     upsetAmount: d.upsetAmount,
-    estimatedMarketValue: null,
+    zillowStatus: null,
+    redfinStatus: null,
+    marketValueUsed: null,
     occupancyStatus: d.occupancyStatus,
-    propertyValuationAvailable: false,
   });
 
   if (isNew) {

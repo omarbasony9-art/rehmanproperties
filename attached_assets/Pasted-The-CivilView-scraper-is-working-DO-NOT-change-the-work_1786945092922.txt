@@ -1,0 +1,611 @@
+The CivilView scraper is working.
+
+DO NOT change the working CivilView scraper.
+
+The problem now is that the tracker is not populating:
+
+MARKET VALUE
+SPREAD
+DISC %
+SCORE
+WARNINGS
+
+I need the valuation architecture fixed.
+
+==================================================
+IMPORTANT
+==================================================
+
+CivilView provides the foreclosure/sheriff-sale information.
+
+Property valuation must be a SEPARATE enrichment step.
+
+Every foreclosure record must remain visible even if valuation fails.
+
+Do not require valuation in order for a CivilView listing to appear.
+
+==================================================
+DATABASE FIELDS
+==================================================
+
+Add/verify these fields:
+
+zillowEstimate
+zillowFetchedAt
+zillowStatus
+
+redfinEstimate
+redfinFetchedAt
+redfinStatus
+
+marketValueUsed
+marketValueSource
+
+estimatedSpread
+discountPercent
+equityMultiple
+
+dealRating
+dealScore
+dealWarnings
+
+valuationUpdatedAt
+
+Possible status values:
+
+SUCCESS
+NOT_FOUND
+NOT_CONFIGURED
+ERROR
+STALE
+
+==================================================
+ZILLOW
+==================================================
+
+Implement Zillow using an APPROVED Zillow Zestimate API integration.
+
+Do NOT scrape Zillow web pages.
+
+Create a valuation provider:
+
+src/services/valuation/zillow.ts
+
+The provider should accept a normalized address.
+
+Input:
+
+street
+city
+state
+zip
+
+Output:
+
+{
+  estimate: number | null,
+  status: "SUCCESS" | "NOT_FOUND" | "NOT_CONFIGURED" | "ERROR",
+  source: "ZILLOW",
+  propertyUrl?: string,
+  fetchedAt: Date
+}
+
+Keep Zillow credentials server-side using environment variables.
+
+Do not guess or fabricate a Zestimate.
+
+If Zillow API access/credentials are not configured:
+
+zillowEstimate = null
+zillowStatus = "NOT_CONFIGURED"
+
+The rest of the application must continue working.
+
+==================================================
+REDFIN
+==================================================
+
+Create a Redfin valuation-provider interface as well:
+
+src/services/valuation/redfin.ts
+
+DO NOT implement unauthorized automated scraping of Redfin.com.
+
+The provider should support a permitted Redfin data source if credentials or
+authorized access are later configured.
+
+For now support:
+
+redfinEstimate
+redfinStatus
+redfinFetchedAt
+
+Also create an ADMIN manual-entry option so I can enter the current Redfin
+Estimate from the Redfin property page if automated authorized data access is
+not configured.
+
+Endpoint:
+
+PATCH /api/foreclosures/:sheriffNumber/valuation/redfin
+
+Body:
+
+{
+  "estimate": 325000
+}
+
+Protect this endpoint with admin authentication or REFRESH_SECRET.
+
+When manually entered:
+
+redfinStatus = "SUCCESS"
+
+and record:
+
+redfinFetchedAt
+redfinEstimate
+
+Also keep a Redfin property-search link for every property.
+
+==================================================
+MARKET VALUE USED
+==================================================
+
+Create one function:
+
+calculateMarketValue()
+
+Rules:
+
+If Zillow Estimate AND Redfin Estimate both exist:
+
+marketValueUsed =
+Math.min(zillowEstimate, redfinEstimate)
+
+marketValueSource =
+"CONSERVATIVE_ZILLOW_REDFIN"
+
+If only Zillow exists:
+
+marketValueUsed = zillowEstimate
+marketValueSource = "ZILLOW"
+
+If only Redfin exists:
+
+marketValueUsed = redfinEstimate
+marketValueSource = "REDFIN"
+
+If neither exists:
+
+marketValueUsed = null
+marketValueSource = "NONE"
+
+IMPORTANT:
+
+Never convert missing values to 0.
+
+null means unknown.
+
+==================================================
+SPREAD
+==================================================
+
+If:
+
+marketValueUsed != null
+AND
+upsetAmount != null
+
+calculate:
+
+estimatedSpread =
+marketValueUsed - upsetAmount
+
+Example:
+
+Market Value = $350,000
+Upset Amount = $190,000
+
+Spread = $160,000
+
+==================================================
+DISCOUNT %
+==================================================
+
+Calculate:
+
+discountPercent =
+((marketValueUsed - upsetAmount) / marketValueUsed) * 100
+
+Example:
+
+350000 - 190000 = 160000
+
+160000 / 350000 = 45.714%
+
+Display:
+
+45.7%
+
+Do NOT calculate discount if market value is missing.
+
+==================================================
+EQUITY MULTIPLE
+==================================================
+
+equityMultiple =
+marketValueUsed / upsetAmount
+
+Example:
+
+350000 / 190000 = 1.84
+
+==================================================
+DEAL RATING
+==================================================
+
+Calculate in this exact order.
+
+EXTREME:
+
+discountPercent >= 40
+AND
+estimatedSpread >= 100000
+
+MAJOR:
+
+discountPercent >= 30
+AND
+estimatedSpread >= 75000
+
+STRONG:
+
+discountPercent >= 20
+AND
+estimatedSpread >= 50000
+
+NORMAL:
+
+valid market value exists but doesn't meet the above conditions
+
+UNKNOWN:
+
+market value or upset amount is missing
+
+==================================================
+DEAL SCORE
+==================================================
+
+Create a transparent deterministic score from 0-100.
+
+NO AI.
+
+DISCOUNT SCORE — maximum 50 points:
+
+discountPercent / 50 * 50
+
+cap at 50.
+
+Examples:
+
+10% discount = 10 points
+25% discount = 25 points
+40% discount = 40 points
+50%+ discount = 50 points
+
+SPREAD SCORE — maximum 30 points:
+
+estimatedSpread / 150000 * 30
+
+cap at 30.
+
+Examples:
+
+$50k spread = 10 points
+$100k spread = 20 points
+$150k+ spread = 30 points
+
+UPSET SCORE — maximum 10 points:
+
+<= $100,000 = 10
+<= $150,000 = 8
+<= $200,000 = 6
+<= $250,000 = 4
+<= $280,000 = 2
+> $280,000 = 0
+
+VALUATION CONFIDENCE — maximum 10:
+
+Both Zillow AND Redfin available = 10
+
+Only one available = 6
+
+Neither available = 0
+
+Total:
+
+dealScore =
+discountScore +
+spreadScore +
+upsetScore +
+valuationConfidence
+
+Round to nearest whole number.
+
+If marketValueUsed is missing:
+
+dealScore = null
+
+==================================================
+WARNINGS
+==================================================
+
+Populate dealWarnings automatically.
+
+Possible values:
+
+OWNER_OCCUPIED
+
+TAX_LIEN
+
+HOA_LIEN
+
+MUNICIPAL_LIEN
+
+KNOWN_PRIOR_LIEN
+
+MISSING_UPSET_AMOUNT
+
+NO_ZILLOW_ESTIMATE
+
+NO_REDFIN_ESTIMATE
+
+VALUATIONS_DIFFER_SIGNIFICANTLY
+
+MARKET_VALUE_UNKNOWN
+
+NEGATIVE_SPREAD
+
+VALUATION_STALE
+
+If Zillow and Redfin both exist and differ by more than 15%:
+
+add:
+
+VALUATIONS_DIFFER_SIGNIFICANTLY
+
+Formula:
+
+difference =
+Math.abs(zillowEstimate - redfinEstimate)
+
+differencePercent =
+difference / Math.min(zillowEstimate, redfinEstimate)
+
+If > 0.15 add warning.
+
+If marketValueUsed < upsetAmount:
+
+add:
+
+NEGATIVE_SPREAD
+
+==================================================
+VALUATION CACHE
+==================================================
+
+Do not waste API requests.
+
+Cache Zillow valuations for 7 days.
+
+If Zillow valuation is less than 7 days old:
+
+DO NOT call Zillow again.
+
+Unless:
+
+force=true
+
+==================================================
+VALUATION PRIORITY
+==================================================
+
+To keep costs low, automatically value properties where:
+
+upsetAmount != null
+AND
+upsetAmount <= 280000
+
+Do not automatically value every expensive sheriff sale.
+
+But add a manual button:
+
+GET VALUE
+
+on every property.
+
+==================================================
+ADMIN UI
+==================================================
+
+Update the All Listings table to show:
+
+DEAL
+SCORE
+SHERIFF #
+SALE DATE
+ADDRESS
+TYPE
+UPSET
+ZILLOW
+REDFIN
+MARKET VALUE
+SPREAD
+DISC %
+WARNINGS
+
+Example:
+
+EXTREME | 91 | F-XXXX | 9/24/26 |
+123 Main St |
+Mortgage |
+$165,000 |
+$340,000 |
+$325,000 |
+$325,000 |
++$160,000 |
+49.2% |
+OWNER OCCUPIED
+
+Market Value should be visually distinct from Zillow and Redfin.
+
+==================================================
+PROPERTY DETAIL PAGE
+==================================================
+
+Show a Valuation section:
+
+Zillow Zestimate:
+$XXX,XXX
+
+Redfin Estimate:
+$XXX,XXX
+
+Market Value Used:
+$XXX,XXX
+
+Valuation Method:
+Conservative — lower of Zillow and Redfin
+
+Upset Amount:
+$XXX,XXX
+
+Potential Spread:
++$XXX,XXX
+
+Discount:
+XX.X%
+
+Equity Multiple:
+X.XXx
+
+Deal Score:
+XX / 100
+
+Deal Rating:
+EXTREME / MAJOR / STRONG / NORMAL / UNKNOWN
+
+Warnings:
+...
+
+Add buttons:
+
+Refresh Zillow
+Enter / Update Redfin Estimate
+Recalculate Deal
+
+==================================================
+RECALCULATION
+==================================================
+
+Whenever any of these changes:
+
+upsetAmount
+zillowEstimate
+redfinEstimate
+priors
+occupancyStatus
+
+automatically recalculate:
+
+marketValueUsed
+marketValueSource
+estimatedSpread
+discountPercent
+equityMultiple
+dealRating
+dealScore
+dealWarnings
+
+Do not require another full CivilView scrape.
+
+==================================================
+API RESPONSE
+==================================================
+
+GET /api/foreclosures
+
+must return fields:
+
+{
+  "sheriffNumber": "...",
+  "address": "...",
+
+  "upsetAmount": 175000,
+
+  "zillowEstimate": 330000,
+  "zillowStatus": "SUCCESS",
+
+  "redfinEstimate": 315000,
+  "redfinStatus": "SUCCESS",
+
+  "marketValueUsed": 315000,
+  "marketValueSource": "CONSERVATIVE_ZILLOW_REDFIN",
+
+  "estimatedSpread": 140000,
+  "discountPercent": 44.4,
+  "equityMultiple": 1.8,
+
+  "dealRating": "EXTREME",
+  "dealScore": 88,
+
+  "dealWarnings": [
+    "OWNER_OCCUPIED"
+  ]
+}
+
+==================================================
+DO NOT FAKE VALUES
+==================================================
+
+This is extremely important.
+
+NEVER:
+
+invent a Zestimate
+invent a Redfin Estimate
+replace null with zero
+use tax assessment as if it were Zestimate
+use asking price as if it were Zestimate
+use upset amount as market value
+
+Every number must state its actual source.
+
+==================================================
+TEST
+==================================================
+
+Find one real CivilView property with upset amount <= $280,000.
+
+Show me:
+
+Sheriff #
+Address
+Upset Amount
+Zillow status
+Zillow Estimate if configured
+Redfin status
+Redfin Estimate if configured
+Market Value Used
+Spread
+Discount %
+Score
+Rating
+Warnings
+
+Then run:
+
+typecheck
+tests
+
+Tell me exactly which files were changed.

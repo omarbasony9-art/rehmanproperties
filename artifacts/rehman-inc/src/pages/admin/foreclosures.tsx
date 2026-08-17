@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AdminLayout } from "@/components/layout/admin-layout";
 import { useSEO } from "@/hooks/use-seo";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Sheet,
   SheetContent,
@@ -10,14 +11,15 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import {
-  Loader2,
-  RefreshCw,
-  MapPin,
-  ExternalLink,
-  AlertTriangle,
-  ChevronLeft,
-  ChevronRight,
-  Sparkles,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  Loader2, RefreshCw, MapPin, ExternalLink as ExternalLinkIcon, AlertTriangle,
+  ChevronLeft, ChevronRight, Sparkles, RotateCcw,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { adminFetch } from "@/lib/admin-api";
@@ -25,7 +27,7 @@ import { normalizeArray } from "@/lib/normalize-array";
 
 const BASE = "/foreclosure-tracker/api";
 
-// ─── Interfaces ───────────────────────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface Listing {
   sheriffNumber: string;
@@ -43,20 +45,37 @@ interface Listing {
   occupancyStatus: string | null;
   foreclosureType: string | null;
   priorsLiensTaxes: string | null;
+  // Links
   googleMapsUrl: string | null;
   zillowUrl: string | null;
+  redfinPropertyUrl: string | null;
+  zillowPropertyUrl: string | null;
   detailUrl: string | null;
-  dealRating: string | null;
-  dealScore: number | null;
-  estimatedMarketValue: number | null;
+  // Valuation — Zillow
+  zillowEstimate: number | null;
+  zillowStatus: string;
+  zillowFetchedAt: string | null;
+  // Valuation — Redfin
+  redfinEstimate: number | null;
+  redfinStatus: string;
+  redfinFetchedAt: string | null;
+  // Market value
+  marketValueUsed: number | null;
+  marketValueSource: string;
+  valuationUpdatedAt: string | null;
+  // Deal
   estimatedSpread: number | null;
   discountPercent: number | null;
   equityMultiple: number | null;
+  dealRating: string;
+  dealScore: number | null;
+  dealWarnings: string[];
   warnings: string[];
-  valuationStatus: string | null;
+  // Timestamps
   firstSeen: string | null;
   lastSeen: string | null;
   lastChanged: string | null;
+  isNew: boolean;
 }
 
 interface ListResponse {
@@ -78,88 +97,172 @@ interface Health {
 type TabId = "all" | "under280k" | "extreme" | "major" | "strong" | "unknown";
 
 const TABS: { id: TabId; label: string; params: Record<string, string> }[] = [
-  { id: "all",      label: "All Listings",       params: {} },
-  { id: "under280k",label: "Under $280K",        params: { maxUpset: "280000" } },
-  { id: "extreme",  label: "Extreme Deals",      params: { rating: "EXTREME" } },
-  { id: "major",    label: "Major Deals",        params: { rating: "MAJOR" } },
-  { id: "strong",   label: "Strong Deals",       params: { rating: "STRONG" } },
-  { id: "unknown",  label: "Unknown Valuation",  params: { unknownValuation: "true" } },
+  { id: "all",       label: "All Listings",       params: {} },
+  { id: "under280k", label: "Under $280K",         params: { maxUpset: "280000" } },
+  { id: "extreme",   label: "Extreme Deals",       params: { rating: "EXTREME" } },
+  { id: "major",     label: "Major Deals",         params: { rating: "MAJOR" } },
+  { id: "strong",    label: "Strong Deals",        params: { rating: "STRONG" } },
+  { id: "unknown",   label: "Unknown Valuation",   params: { unknownValuation: "true" } },
 ];
 
-// ─── Style helpers ─────────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const RATING_COLORS: Record<string, string> = {
-  EXTREME: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400 border-red-300",
-  MAJOR:   "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400 border-orange-300",
-  STRONG:  "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 border-amber-300",
-  NORMAL:  "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300 border-gray-300",
-  UNKNOWN: "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400 border-slate-300",
+  EXTREME: "bg-red-100 text-red-800 border-red-300 dark:bg-red-900/30 dark:text-red-400",
+  MAJOR:   "bg-orange-100 text-orange-800 border-orange-300 dark:bg-orange-900/30 dark:text-orange-400",
+  STRONG:  "bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/30 dark:text-amber-400",
+  NORMAL:  "bg-gray-100 text-gray-700 border-gray-300 dark:bg-gray-800 dark:text-gray-300",
+  UNKNOWN: "bg-slate-100 text-slate-500 border-slate-300 dark:bg-slate-800 dark:text-slate-400",
 };
 
 const TYPE_LABELS: Record<string, string> = {
   tax_foreclosure:      "Tax",
   lien_foreclosure:     "Lien",
   mortgage_foreclosure: "Mortgage",
-  unknown:              "Unknown",
+  unknown:              "—",
+};
+
+const SOURCE_LABELS: Record<string, string> = {
+  CONSERVATIVE_ZILLOW_REDFIN: "Conservative (Zillow & Redfin)",
+  ZILLOW: "Zillow",
+  REDFIN: "Redfin",
+  NONE:   "—",
 };
 
 function fmt$(n: number | null | undefined) {
-  if (n == null) return "—";
+  if (n == null) return null;
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n);
 }
 function fmtDate(s: string | null | undefined) {
   if (!s) return "—";
-  const d = new Date(s + (s.includes("T") ? "" : "T12:00:00"));
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  return new Date(s + (s.includes("T") ? "" : "T12:00:00")).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 function fmtDateTime(s: string | null | undefined) {
   if (!s) return "Never";
   return new Date(s).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
-
-function RatingBadge({ rating }: { rating: string | null }) {
+function RatingBadge({ rating }: { rating: string }) {
   const r = rating ?? "UNKNOWN";
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold border ${RATING_COLORS[r] ?? RATING_COLORS["UNKNOWN"]}`}>
+    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-bold border ${RATING_COLORS[r] ?? RATING_COLORS["UNKNOWN"]}`}>
       {r}
     </span>
   );
 }
 
-function Row({ label, value }: { label: string; value: React.ReactNode }) {
+function ValCell({ value, label }: { value: number | null; label?: string }) {
+  if (value == null) return <span className="text-muted-foreground/60 italic text-xs">—</span>;
+  return <span>{label}{fmt$(value)}</span>;
+}
+
+// ─── Redfin Modal ─────────────────────────────────────────────────────────────
+
+function RedfinModal({
+  listing,
+  open,
+  onClose,
+  onSaved,
+}: {
+  listing: Listing | null;
+  open: boolean;
+  onClose: () => void;
+  onSaved: (updated: Listing) => void;
+}) {
+  const { toast } = useToast();
+  const [value, setValue] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  if (!listing) return null;
+
+  const handleSave = async () => {
+    const n = parseFloat(value.replace(/[$,]/g, ""));
+    if (isNaN(n) || n <= 0) { toast({ title: "Invalid amount", variant: "destructive" }); return; }
+    setSaving(true);
+    try {
+      const resp = await fetch(`${BASE}/foreclosures/${listing.sheriffNumber}/valuation/redfin`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ estimate: n }),
+      });
+      if (!resp.ok) {
+        const err = await resp.json() as { error?: string };
+        toast({ title: "Error", description: err.error ?? "Failed to save", variant: "destructive" });
+        return;
+      }
+      toast({ title: "Redfin estimate saved", description: `$${n.toLocaleString()}` });
+      // Fetch updated property
+      const refreshed = await fetch(`${BASE}/foreclosures/${listing.sheriffNumber}`).then((r) => r.json()) as Listing;
+      onSaved(refreshed);
+      onClose();
+    } catch (err) {
+      toast({ title: "Network error", description: err instanceof Error ? err.message : "Unknown", variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
-    <div className="flex justify-between gap-2">
-      <span className="text-muted-foreground shrink-0">{label}</span>
-      <span className="text-right truncate">{value ?? "—"}</span>
-    </div>
+    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Enter Redfin Estimate</DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-muted-foreground">
+          Enter the Redfin estimate for <span className="font-mono font-semibold">{listing.sheriffNumber}</span>.
+          {listing.redfinPropertyUrl && (
+            <> <a href={listing.redfinPropertyUrl} target="_blank" rel="noreferrer" className="text-primary underline">Open Redfin search</a> to look it up.</>
+          )}
+        </p>
+        <Input
+          placeholder="e.g. 325000"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") handleSave(); }}
+          autoFocus
+        />
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={saving}>Cancel</Button>
+          <Button onClick={handleSave} disabled={saving}>
+            {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+            Save Estimate
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
+
+// ─── Detail Sheet ─────────────────────────────────────────────────────────────
 
 function DetailSheet({
   listing,
   open,
   onClose,
-  onGetValue,
-  valuating,
+  onZillowRefresh,
+  onRedfinEntry,
+  onRecalculate,
+  zillowLoading,
+  recalcLoading,
 }: {
   listing: Listing | null;
   open: boolean;
   onClose: () => void;
-  onGetValue: (l: Listing) => void;
-  valuating: boolean;
+  onZillowRefresh: (l: Listing) => void;
+  onRedfinEntry: (l: Listing) => void;
+  onRecalculate: (l: Listing) => void;
+  zillowLoading: boolean;
+  recalcLoading: boolean;
 }) {
   if (!listing) return null;
   const addr = [listing.streetAddress, listing.city, listing.state, listing.zipCode].filter(Boolean).join(", ");
-  const hasMarketValue = listing.estimatedMarketValue != null;
-  const canValue = !hasMarketValue || listing.valuationStatus === "NOT_FOUND";
+  const warnings = listing.dealWarnings ?? listing.warnings ?? [];
 
   return (
     <Sheet open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
+      <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
         <SheetHeader>
-          <SheetTitle className="text-base font-semibold font-mono">{listing.sheriffNumber}</SheetTitle>
+          <SheetTitle className="font-mono text-sm">{listing.sheriffNumber}</SheetTitle>
           {addr && <p className="text-sm text-muted-foreground">{addr}</p>}
         </SheetHeader>
 
@@ -167,24 +270,15 @@ function DetailSheet({
           {/* Rating + Score */}
           <div className="flex items-center gap-3 flex-wrap">
             <RatingBadge rating={listing.dealRating} />
-            {listing.dealScore != null && (
-              <span className="text-sm text-muted-foreground">Score: {listing.dealScore}/100</span>
-            )}
-            {listing.valuationStatus && listing.valuationStatus !== "UNKNOWN" && (
-              <span className={`text-xs px-2 py-0.5 rounded border ${
-                listing.valuationStatus === "SUCCESS" ? "bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400" :
-                listing.valuationStatus === "NOT_FOUND" ? "bg-yellow-50 text-yellow-700 border-yellow-200 dark:bg-yellow-900/20 dark:text-yellow-400" :
-                "bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-400"
-              }`}>
-                {listing.valuationStatus}
-              </span>
-            )}
+            {listing.dealScore != null
+              ? <span className="text-sm font-semibold">{listing.dealScore} / 100</span>
+              : <span className="text-sm text-muted-foreground">No score yet</span>}
           </div>
 
           {/* Warnings */}
-          {listing.warnings?.length > 0 && (
+          {warnings.length > 0 && (
             <div className="rounded-md bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 p-3 space-y-1">
-              {listing.warnings.map((w) => (
+              {warnings.map((w) => (
                 <div key={w} className="flex items-center gap-2 text-xs text-amber-800 dark:text-amber-300">
                   <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
                   {w.replace(/_/g, " ")}
@@ -193,66 +287,102 @@ function DetailSheet({
             </div>
           )}
 
-          {/* Financials */}
-          <div className="grid grid-cols-2 gap-3">
+          {/* Valuation section */}
+          <div className="rounded-lg border p-4 space-y-3">
+            <h3 className="text-sm font-semibold">Valuation</h3>
+
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div>
+                <p className="text-xs text-muted-foreground">Zillow Zestimate</p>
+                <p className={`font-medium mt-0.5 ${listing.zillowEstimate == null ? "text-muted-foreground italic" : ""}`}>
+                  {listing.zillowEstimate != null ? fmt$(listing.zillowEstimate) : listing.zillowStatus}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Redfin Estimate</p>
+                <p className={`font-medium mt-0.5 ${listing.redfinEstimate == null ? "text-muted-foreground italic" : ""}`}>
+                  {listing.redfinEstimate != null ? fmt$(listing.redfinEstimate) : listing.redfinStatus}
+                </p>
+              </div>
+              <div className="col-span-2 bg-muted/50 rounded-md p-2">
+                <p className="text-xs text-muted-foreground">Market Value Used</p>
+                <p className="font-semibold text-base mt-0.5">
+                  {listing.marketValueUsed != null ? fmt$(listing.marketValueUsed) : <span className="text-muted-foreground italic">Not valued yet</span>}
+                </p>
+                {listing.marketValueSource !== "NONE" && (
+                  <p className="text-xs text-muted-foreground mt-0.5">{SOURCE_LABELS[listing.marketValueSource] ?? listing.marketValueSource}</p>
+                )}
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Upset Amount</p>
+                <p className="font-medium mt-0.5">{fmt$(listing.upsetAmount) ?? "—"}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Potential Spread</p>
+                <p className={`font-medium mt-0.5 ${listing.estimatedSpread != null && listing.estimatedSpread > 0 ? "text-green-600 dark:text-green-400" : ""}`}>
+                  {listing.estimatedSpread != null ? `+${fmt$(listing.estimatedSpread)}` : "—"}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Discount</p>
+                <p className="font-medium mt-0.5">
+                  {listing.discountPercent != null ? `${listing.discountPercent.toFixed(1)}%` : "—"}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Equity Multiple</p>
+                <p className="font-medium mt-0.5">
+                  {listing.equityMultiple != null ? `${listing.equityMultiple.toFixed(2)}x` : "—"}
+                </p>
+              </div>
+            </div>
+
+            {/* Valuation action buttons */}
+            <div className="flex gap-2 flex-wrap pt-1">
+              <Button size="sm" variant="outline" className="gap-1.5" onClick={() => onZillowRefresh(listing)} disabled={zillowLoading}>
+                {zillowLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                Refresh Zillow
+              </Button>
+              <Button size="sm" variant="outline" className="gap-1.5" onClick={() => onRedfinEntry(listing)}>
+                {listing.redfinEstimate ? "Update Redfin" : "Enter Redfin"}
+              </Button>
+              <Button size="sm" variant="ghost" className="gap-1.5 text-muted-foreground" onClick={() => onRecalculate(listing)} disabled={recalcLoading}>
+                {recalcLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
+                Recalculate
+              </Button>
+            </div>
+          </div>
+
+          {/* Property details */}
+          <div className="space-y-2 text-sm">
             {[
-              ["Upset Amount",    fmt$(listing.upsetAmount)],
-              ["Market Value",    hasMarketValue ? fmt$(listing.estimatedMarketValue) : "Not valued yet"],
-              ["Potential Spread", hasMarketValue ? fmt$(listing.estimatedSpread) : "—"],
-              ["Discount",        listing.discountPercent != null ? `${listing.discountPercent.toFixed(1)}%` : "—"],
+              ["Type",       TYPE_LABELS[listing.foreclosureType ?? ""] ?? listing.foreclosureType ?? "—"],
+              ["Plaintiff",  listing.plaintiffName],
+              ["Defendant",  listing.defendantName],
+              ["Sale Date",  fmtDate(listing.currentSaleDate)],
+              ["Court Case", listing.courtCaseNumber],
+              ["Occupancy",  listing.occupancyStatus],
+              ["First Seen", fmtDateTime(listing.firstSeen)],
             ].map(([label, val]) => (
-              <div key={label} className="rounded-md bg-muted/50 p-3">
-                <p className="text-xs text-muted-foreground">{label}</p>
-                <p className={`text-sm font-semibold mt-0.5 ${val === "Not valued yet" ? "text-muted-foreground italic" : ""}`}>{val as string}</p>
+              <div key={label} className="flex justify-between gap-2">
+                <span className="text-muted-foreground shrink-0">{label}</span>
+                <span className="text-right truncate">{val ?? "—"}</span>
               </div>
             ))}
+            {listing.priorsLiensTaxes && (
+              <div className="flex justify-between gap-2">
+                <span className="text-muted-foreground shrink-0">Priors/Liens</span>
+                <span className="text-right text-xs line-clamp-3 max-w-[260px]">{listing.priorsLiensTaxes}</span>
+              </div>
+            )}
           </div>
 
-          {/* Get Property Value button */}
-          <Button
-            variant="outline"
-            size="sm"
-            className="w-full gap-2"
-            onClick={() => onGetValue(listing)}
-            disabled={valuating}
-          >
-            {valuating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-            {valuating ? "Fetching valuation…" : "Get Property Value"}
-          </Button>
-
-          {/* Property Info */}
-          <div className="space-y-2 text-sm">
-            <Row label="Type"        value={TYPE_LABELS[listing.foreclosureType ?? ""] ?? listing.foreclosureType ?? "—"} />
-            <Row label="Plaintiff"   value={listing.plaintiffName} />
-            <Row label="Defendant"   value={listing.defendantName} />
-            <Row label="Sale Date"   value={fmtDate(listing.currentSaleDate)} />
-            <Row label="Court Case"  value={listing.courtCaseNumber} />
-            <Row label="Occupancy"   value={listing.occupancyStatus} />
-            <Row label="Priors/Liens" value={listing.priorsLiensTaxes ? listing.priorsLiensTaxes.slice(0, 200) + (listing.priorsLiensTaxes.length > 200 ? "…" : "") : null} />
-            <Row label="First Seen"  value={fmtDateTime(listing.firstSeen)} />
-            <Row label="Last Seen"   value={fmtDateTime(listing.lastSeen)} />
-          </div>
-
-          {/* External Links */}
-          <div className="flex gap-4">
-            {listing.googleMapsUrl && (
-              <a href={listing.googleMapsUrl} target="_blank" rel="noreferrer"
-                className="flex items-center gap-1 text-xs text-primary hover:underline">
-                <MapPin className="w-3.5 h-3.5" /> Maps
-              </a>
-            )}
-            {listing.zillowUrl && (
-              <a href={listing.zillowUrl} target="_blank" rel="noreferrer"
-                className="flex items-center gap-1 text-xs text-primary hover:underline">
-                <ExternalLink className="w-3.5 h-3.5" /> Zillow
-              </a>
-            )}
-            {listing.detailUrl && (
-              <a href={listing.detailUrl} target="_blank" rel="noreferrer"
-                className="flex items-center gap-1 text-xs text-primary hover:underline">
-                <ExternalLink className="w-3.5 h-3.5" /> CivilView
-              </a>
-            )}
+          {/* External links */}
+          <div className="flex gap-4 flex-wrap">
+            {listing.googleMapsUrl && <PropLink label="Maps" href={listing.googleMapsUrl} icon={<MapPin className="w-3.5 h-3.5" />} />}
+            {(listing.zillowPropertyUrl ?? listing.zillowUrl) && <PropLink label="Zillow" href={listing.zillowPropertyUrl ?? listing.zillowUrl!} icon={<ExternalLinkIcon className="w-3.5 h-3.5" />} />}
+            {listing.redfinPropertyUrl && <PropLink label="Redfin" href={listing.redfinPropertyUrl} icon={<ExternalLinkIcon className="w-3.5 h-3.5" />} />}
+            {listing.detailUrl && <PropLink label="CivilView" href={listing.detailUrl} icon={<ExternalLinkIcon className="w-3.5 h-3.5" />} />}
           </div>
         </div>
       </SheetContent>
@@ -260,7 +390,15 @@ function DetailSheet({
   );
 }
 
-// ─── Main component ───────────────────────────────────────────────────────────
+function PropLink({ href, label, icon }: { href: string; label: string; icon: React.ReactNode }) {
+  return (
+    <a href={href} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-xs text-primary hover:underline">
+      {icon} {label}
+    </a>
+  );
+}
+
+// ─── Main ─────────────────────────────────────────────────────────────────────
 
 const LIMIT = 50;
 
@@ -271,8 +409,10 @@ export default function AdminForeclosures() {
   const [tab, setTab]     = useState<TabId>("all");
   const [page, setPage]   = useState(1);
   const [selected, setSelected] = useState<Listing | null>(null);
+  const [redfinTarget, setRedfinTarget] = useState<Listing | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [valuatingId, setValuatingId] = useState<string | null>(null);
+  const [zillowLoadingId, setZillowLoadingId]   = useState<string | null>(null);
+  const [recalcLoadingId, setRecalcLoadingId]   = useState<string | null>(null);
 
   const healthQ = useQuery<Health>({
     queryKey: ["fc-health"],
@@ -281,11 +421,7 @@ export default function AdminForeclosures() {
   });
 
   const activeTab = TABS.find((t) => t.id === tab) ?? TABS[0]!;
-  const params = new URLSearchParams({
-    page:  String(page),
-    limit: String(LIMIT),
-    ...activeTab.params,
-  });
+  const params = new URLSearchParams({ page: String(page), limit: String(LIMIT), ...activeTab.params });
 
   const listQ = useQuery<ListResponse>({
     queryKey: ["fc-listings", tab, page],
@@ -294,6 +430,7 @@ export default function AdminForeclosures() {
 
   const listings   = normalizeArray<Listing>(listQ.data, ["items"]);
   const totalPages = Math.ceil((listQ.data?.total ?? 0) / LIMIT);
+  const health     = healthQ.data;
 
   const handleTabChange = (id: TabId) => { setTab(id); setPage(1); };
 
@@ -301,50 +438,63 @@ export default function AdminForeclosures() {
     setRefreshing(true);
     try {
       await adminFetch("/api/admin/foreclosure-refresh", { method: "POST" });
-      toast({ title: "Refresh started", description: "CivilView scrape is running in the background." });
+      toast({ title: "Refresh started", description: "CivilView scrape running in background." });
       setTimeout(() => { healthQ.refetch(); listQ.refetch(); }, 8000);
-    } catch (err: unknown) {
+    } catch (err) {
       toast({ title: "Refresh failed", description: err instanceof Error ? err.message : "Unknown error", variant: "destructive" });
     } finally {
       setRefreshing(false);
     }
   };
 
-  const handleGetValue = async (listing: Listing) => {
-    const apiKey = true; // checked server-side
-    if (!apiKey) return;
-    setValuatingId(listing.sheriffNumber);
+  const refreshListing = async (sheriffNumber: string): Promise<Listing | null> => {
+    try {
+      return await fetch(`${BASE}/foreclosures/${sheriffNumber}`).then((r) => r.json()) as Listing;
+    } catch { return null; }
+  };
+
+  const handleZillowRefresh = async (listing: Listing) => {
+    setZillowLoadingId(listing.sheriffNumber);
     try {
       const resp = await fetch(`${BASE}/foreclosures/${listing.sheriffNumber}/valuation`, { method: "POST" });
-      const data = await resp.json() as { valuationStatus?: string; estimatedMarketValue?: number; error?: string };
+      const data = await resp.json() as { outcome?: string; zillow_status?: string; error?: string };
       if (!resp.ok) {
-        toast({ title: "Valuation failed", description: data.error ?? "Unknown error", variant: "destructive" });
+        toast({ title: "Zillow error", description: data.error ?? "Unknown error", variant: "destructive" });
         return;
       }
-      if (data.valuationStatus === "NOT_FOUND") {
-        toast({ title: "Property not found", description: "RentCast could not identify this property." });
-      } else if (data.estimatedMarketValue) {
-        toast({ title: "Valuation complete", description: `Market value: ${fmt$(data.estimatedMarketValue)}` });
-      }
-      // Refresh listings and update selected
+      const outcome = data.outcome ?? data.zillow_status ?? "done";
+      toast({ title: "Zillow refresh complete", description: `Status: ${outcome}` });
       await queryClient.invalidateQueries({ queryKey: ["fc-listings"] });
-      if (selected?.sheriffNumber === listing.sheriffNumber) {
-        // Re-fetch to update the sheet
-        const updated = await fetch(`${BASE}/foreclosures/${listing.sheriffNumber}`).then((r) => r.json()) as Listing;
-        setSelected(updated);
-      }
+      const updated = await refreshListing(listing.sheriffNumber);
+      if (updated) setSelected(updated);
     } catch (err) {
-      toast({ title: "Valuation error", description: err instanceof Error ? err.message : "Network error", variant: "destructive" });
+      toast({ title: "Zillow error", description: err instanceof Error ? err.message : "Unknown", variant: "destructive" });
     } finally {
-      setValuatingId(null);
+      setZillowLoadingId(null);
     }
   };
 
-  const health = healthQ.data;
+  const handleRecalculate = async (listing: Listing) => {
+    setRecalcLoadingId(listing.sheriffNumber);
+    try {
+      const resp = await fetch(`${BASE}/foreclosures/${listing.sheriffNumber}/recalculate`, { method: "POST" });
+      if (!resp.ok) {
+        toast({ title: "Recalculate failed", variant: "destructive" }); return;
+      }
+      toast({ title: "Deal recalculated" });
+      await queryClient.invalidateQueries({ queryKey: ["fc-listings"] });
+      const updated = await refreshListing(listing.sheriffNumber);
+      if (updated) setSelected(updated);
+    } catch (err) {
+      toast({ title: "Error", description: err instanceof Error ? err.message : "Unknown", variant: "destructive" });
+    } finally {
+      setRecalcLoadingId(null);
+    }
+  };
 
   return (
     <AdminLayout>
-      <div className="p-6 space-y-6 max-w-[1400px] mx-auto">
+      <div className="p-6 space-y-6 max-w-[1600px] mx-auto">
         {/* Header */}
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div>
@@ -357,14 +507,14 @@ export default function AdminForeclosures() {
           </Button>
         </div>
 
-        {/* Stats bar */}
+        {/* Stats */}
         {health && (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {[
-              ["Total Listings", String(health.listingCount)],
-              ["Watch List",     String(health.majorDeals)],
+              ["Total Listings", String(health.listingCount ?? "—")],
+              ["Watch List",     String(health.majorDeals ?? "—")],
               ["Last Refresh",   fmtDateTime(health.lastRefresh)],
-              ["Status",         health.status === "ok" ? "Online" : "Error"],
+              ["Status",         health.status === "ok" ? "Online" : "Degraded"],
             ].map(([label, val]) => (
               <div key={label} className="rounded-lg border bg-card p-4">
                 <p className="text-xs text-muted-foreground">{label}</p>
@@ -377,15 +527,12 @@ export default function AdminForeclosures() {
         {/* Tabs */}
         <div className="flex flex-wrap gap-1 border-b">
           {TABS.map((t) => (
-            <button
-              key={t.id}
-              onClick={() => handleTabChange(t.id)}
+            <button key={t.id} onClick={() => handleTabChange(t.id)}
               className={`px-4 py-2 text-sm font-medium transition-colors rounded-t-md -mb-px border-b-2 ${
                 tab === t.id
                   ? "border-primary text-primary bg-background"
                   : "border-transparent text-muted-foreground hover:text-foreground hover:border-muted"
-              }`}
-            >
+              }`}>
               {t.label}
             </button>
           ))}
@@ -394,74 +541,75 @@ export default function AdminForeclosures() {
         {/* Table */}
         <div className="rounded-lg border bg-card overflow-hidden">
           {listQ.isLoading ? (
-            <div className="flex items-center justify-center h-40">
-              <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-            </div>
+            <div className="flex items-center justify-center h-40"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>
           ) : listQ.isError ? (
             <div className="flex flex-col items-center justify-center h-40 gap-2 text-muted-foreground">
-              <p className="text-sm font-medium text-destructive">Unable to load listings.</p>
+              <p className="text-sm text-destructive">Unable to load listings.</p>
               <p className="text-xs">Check that the Foreclosure Tracker service is running.</p>
             </div>
           ) : listings.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-40 gap-2 text-muted-foreground">
               <p className="text-sm">No listings found.</p>
               {tab === "all" && <p className="text-xs">Click "Refresh CivilView" to import data.</p>}
-              {(tab === "extreme" || tab === "major" || tab === "strong") && (
-                <p className="text-xs">No {tab} deals yet — run valuations to score properties.</p>
-              )}
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b bg-muted/50 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                    <th className="px-3 py-3 whitespace-nowrap">Rating</th>
-                    <th className="px-3 py-3 whitespace-nowrap">Sheriff #</th>
-                    <th className="px-3 py-3 whitespace-nowrap">Sale Date</th>
-                    <th className="px-3 py-3">Address</th>
-                    <th className="px-3 py-3 whitespace-nowrap">Type</th>
-                    <th className="px-3 py-3 whitespace-nowrap">Upset Amt</th>
-                    <th className="px-3 py-3 whitespace-nowrap">Market Value</th>
-                    <th className="px-3 py-3 whitespace-nowrap">Spread</th>
-                    <th className="px-3 py-3 whitespace-nowrap">Disc %</th>
-                    <th className="px-3 py-3 whitespace-nowrap">Score</th>
-                    <th className="px-3 py-3">Warnings</th>
+                  <tr className="border-b bg-muted/50 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    {["Deal", "Score", "Sheriff #", "Sale Date", "Address", "Type",
+                      "Upset", "Zillow", "Redfin", "Market Value", "Spread", "Disc %", "Warnings"].map((h) => (
+                      <th key={h} className="px-3 py-3 text-left whitespace-nowrap">{h}</th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody className="divide-y">
                   {listings.map((item) => {
                     const addr = [item.streetAddress, item.city].filter(Boolean).join(", ");
+                    const w = item.dealWarnings ?? item.warnings ?? [];
                     return (
-                      <tr
-                        key={item.sheriffNumber}
-                        onClick={() => setSelected(item)}
-                        className="hover:bg-muted/40 cursor-pointer transition-colors"
-                      >
+                      <tr key={item.sheriffNumber} onClick={() => setSelected(item)}
+                        className="hover:bg-muted/40 cursor-pointer transition-colors">
                         <td className="px-3 py-2.5"><RatingBadge rating={item.dealRating} /></td>
+                        <td className="px-3 py-2.5 tabular-nums font-semibold">
+                          {item.dealScore != null ? item.dealScore : <span className="text-muted-foreground/50">—</span>}
+                        </td>
                         <td className="px-3 py-2.5 font-mono text-xs text-muted-foreground whitespace-nowrap">{item.sheriffNumber}</td>
                         <td className="px-3 py-2.5 text-xs whitespace-nowrap tabular-nums">{fmtDate(item.currentSaleDate)}</td>
-                        <td className="px-3 py-2.5 max-w-[200px] truncate">{addr || "—"}</td>
+                        <td className="px-3 py-2.5 max-w-[180px] truncate">{addr || "—"}</td>
                         <td className="px-3 py-2.5 text-xs whitespace-nowrap">{TYPE_LABELS[item.foreclosureType ?? ""] ?? "—"}</td>
-                        <td className="px-3 py-2.5 font-medium tabular-nums whitespace-nowrap">{fmt$(item.upsetAmount)}</td>
+                        <td className="px-3 py-2.5 tabular-nums whitespace-nowrap font-medium">{fmt$(item.upsetAmount) ?? "—"}</td>
                         <td className="px-3 py-2.5 tabular-nums whitespace-nowrap">
-                          {item.estimatedMarketValue != null
-                            ? fmt$(item.estimatedMarketValue)
-                            : <span className="text-muted-foreground italic text-xs">Not valued yet</span>}
-                        </td>
-                        <td className="px-3 py-2.5 tabular-nums whitespace-nowrap">{fmt$(item.estimatedSpread)}</td>
-                        <td className="px-3 py-2.5 tabular-nums whitespace-nowrap">
-                          {item.discountPercent != null ? `${item.discountPercent.toFixed(1)}%` : "—"}
+                          <ValCell value={item.zillowEstimate} />
                         </td>
                         <td className="px-3 py-2.5 tabular-nums whitespace-nowrap">
-                          {item.dealScore != null ? item.dealScore : "—"}
+                          <ValCell value={item.redfinEstimate} />
                         </td>
-                        <td className="px-3 py-2.5 text-xs max-w-[140px]">
-                          {item.warnings?.length > 0 ? (
-                            <span className="flex items-center gap-1 text-amber-600 dark:text-amber-400">
-                              <AlertTriangle className="w-3 h-3 shrink-0" />
-                              {item.warnings.length} warning{item.warnings.length > 1 ? "s" : ""}
-                            </span>
-                          ) : "—"}
+                        {/* Market value — visually distinct */}
+                        <td className="px-3 py-2.5 tabular-nums whitespace-nowrap">
+                          {item.marketValueUsed != null
+                            ? <span className="font-semibold text-foreground">{fmt$(item.marketValueUsed)}</span>
+                            : <span className="text-muted-foreground/60 italic text-xs">Not valued</span>}
+                        </td>
+                        <td className="px-3 py-2.5 tabular-nums whitespace-nowrap">
+                          {item.estimatedSpread != null
+                            ? <span className={item.estimatedSpread > 0 ? "text-green-600 dark:text-green-400 font-medium" : "text-red-500"}>
+                                {item.estimatedSpread > 0 ? "+" : ""}{fmt$(item.estimatedSpread)}
+                              </span>
+                            : <span className="text-muted-foreground/60 text-xs">—</span>}
+                        </td>
+                        <td className="px-3 py-2.5 tabular-nums whitespace-nowrap">
+                          {item.discountPercent != null
+                            ? `${item.discountPercent.toFixed(1)}%`
+                            : <span className="text-muted-foreground/60 text-xs">—</span>}
+                        </td>
+                        <td className="px-3 py-2.5 text-xs">
+                          {w.length > 0
+                            ? <span className="flex items-center gap-1 text-amber-600 dark:text-amber-400">
+                                <AlertTriangle className="w-3 h-3 shrink-0" />
+                                {w.length}
+                              </span>
+                            : "—"}
                         </td>
                       </tr>
                     );
@@ -475,9 +623,7 @@ export default function AdminForeclosures() {
         {/* Pagination */}
         {totalPages > 1 && (
           <div className="flex items-center justify-between text-sm">
-            <span className="text-muted-foreground">
-              Page {page} of {totalPages} · {listQ.data?.total ?? 0} listings
-            </span>
+            <span className="text-muted-foreground">Page {page} of {totalPages} · {listQ.data?.total ?? 0} listings</span>
             <div className="flex gap-2">
               <Button variant="outline" size="sm" onClick={() => setPage((p) => p - 1)} disabled={page <= 1}>
                 <ChevronLeft className="w-4 h-4" />
@@ -494,8 +640,22 @@ export default function AdminForeclosures() {
         listing={selected}
         open={!!selected}
         onClose={() => setSelected(null)}
-        onGetValue={handleGetValue}
-        valuating={valuatingId === selected?.sheriffNumber}
+        onZillowRefresh={handleZillowRefresh}
+        onRedfinEntry={(l) => { setRedfinTarget(l); }}
+        onRecalculate={handleRecalculate}
+        zillowLoading={zillowLoadingId === selected?.sheriffNumber}
+        recalcLoading={recalcLoadingId === selected?.sheriffNumber}
+      />
+
+      <RedfinModal
+        listing={redfinTarget}
+        open={!!redfinTarget}
+        onClose={() => setRedfinTarget(null)}
+        onSaved={(updated) => {
+          setRedfinTarget(null);
+          setSelected(updated);
+          queryClient.invalidateQueries({ queryKey: ["fc-listings"] });
+        }}
       />
     </AdminLayout>
   );

@@ -2,64 +2,69 @@
  * Deal scoring and rating — deterministic financial calculations only.
  * NO AI. NO LLM. Rules only.
  *
- * Rating thresholds (spec 2026-08-17):
- *   EXTREME: discountPercent >= 40 AND spread >= 100,000
- *   MAJOR:   discountPercent >= 30 AND spread >= 75,000
- *   STRONG:  discountPercent >= 20 AND spread >= 50,000
- *   NORMAL:  valuation exists but doesn't qualify above
- *   UNKNOWN: no reliable valuation
+ * Rating thresholds (evaluate in order):
+ *   EXTREME: discountPercent >= 40 AND estimatedSpread >= $100k
+ *   MAJOR:   discountPercent >= 30 AND estimatedSpread >= $75k
+ *   STRONG:  discountPercent >= 20 AND estimatedSpread >= $50k
+ *   NORMAL:  valid market value exists but doesn't qualify above
+ *   UNKNOWN: market value or upset amount is missing
  *
- * Score components (0–100):
- *   Discount %   → max 50 pts
- *   Dollar spread → max 30 pts
- *   Lower upset  → max 10 pts  ($0=10pts, $280k=0pts)
- *   Data quality → max 10 pts
+ * Score (0–100):
+ *   Discount score   — max 50 pts: min(discountPercent, 50)
+ *   Spread score     — max 30 pts: min(spread / 150000 * 30, 30)
+ *   Upset score      — max 10 pts: tiered by upset amount
+ *   Val. confidence  — max 10 pts: both=10, one=6, none=0
  *
- * If upsetAmount or estimatedMarketValue is missing:
- *   dealScore = null, dealRating = "UNKNOWN"
+ * dealScore = null when marketValueUsed is missing.
  */
 
 export type DealRating = "EXTREME" | "MAJOR" | "STRONG" | "NORMAL" | "UNKNOWN";
 
 export type DealWarning =
-  | "KNOWN_PRIOR_LIEN"
-  | "TAX_LIEN"
-  | "MUNICIPAL_LIEN"
-  | "HOA_LIEN"
   | "OWNER_OCCUPIED"
-  | "UNKNOWN_MARKET_VALUE"
+  | "TAX_LIEN"
+  | "HOA_LIEN"
+  | "MUNICIPAL_LIEN"
+  | "KNOWN_PRIOR_LIEN"
   | "MISSING_UPSET_AMOUNT"
-  | "PROPERTY_DATA_MISSING";
+  | "NO_ZILLOW_ESTIMATE"
+  | "NO_REDFIN_ESTIMATE"
+  | "VALUATIONS_DIFFER_SIGNIFICANTLY"
+  | "MARKET_VALUE_UNKNOWN"
+  | "NEGATIVE_SPREAD"
+  | "VALUATION_STALE";
 
 export interface DealMetrics {
   dealRating: DealRating;
-  /** null when valuation is missing */
+  /** null when marketValueUsed is missing */
   dealScore: number | null;
   estimatedSpread: number | null;
-  /** Rounded to 1 decimal place */
+  /** Rounded to 1 decimal place, null when marketValueUsed is missing */
   discountPercent: number | null;
   equityMultiple: number | null;
 }
 
 export function scoreDeal(
   upsetAmount: number | null,
-  estimatedMarketValue: number | null,
+  marketValueUsed: number | null,
+  zillowEstimate: number | null,
+  redfinEstimate: number | null,
 ): DealMetrics {
-  if (!upsetAmount || !estimatedMarketValue || estimatedMarketValue <= 0) {
+  if (!upsetAmount || !marketValueUsed || marketValueUsed <= 0) {
     return {
-      dealRating: "UNKNOWN",
-      dealScore: null,
+      dealRating:      "UNKNOWN",
+      dealScore:       null,
       estimatedSpread: null,
       discountPercent: null,
-      equityMultiple: null,
+      equityMultiple:  null,
     };
   }
 
-  const spread    = estimatedMarketValue - upsetAmount;
-  const discount  = (spread / estimatedMarketValue) * 100;
-  const multiple  = estimatedMarketValue / upsetAmount;
+  const spread   = marketValueUsed - upsetAmount;
+  const discount = (spread / marketValueUsed) * 100;
+  const multiple = marketValueUsed / upsetAmount;
 
-  // Rating — evaluated in priority order: EXTREME > MAJOR > STRONG > NORMAL
+  // Rating — evaluated in priority order
   let rating: DealRating = "NORMAL";
   if (discount >= 40 && spread >= 100_000) {
     rating = "EXTREME";
@@ -69,50 +74,90 @@ export function scoreDeal(
     rating = "STRONG";
   }
 
-  // Score (0–100)
-  const discountPts = Math.min(50, Math.max(0, discount));
-  const spreadPts   = Math.min(30, Math.max(0, (spread / 150_000) * 30));
-  const upsetPts    = Math.min(10, Math.max(0, ((280_000 - upsetAmount) / 280_000) * 10));
-  const dataPts     = 10; // full score when both values are present
+  // Discount score: min(discountPercent, 50)
+  const discountScore = Math.min(50, Math.max(0, discount));
 
-  const score = Math.round(discountPts + spreadPts + upsetPts + dataPts);
+  // Spread score: min(spread / 150000 * 30, 30)
+  const spreadScore = Math.min(30, Math.max(0, (spread / 150_000) * 30));
+
+  // Upset score — tiered
+  let upsetScore = 0;
+  if (upsetAmount <= 100_000)       upsetScore = 10;
+  else if (upsetAmount <= 150_000)  upsetScore = 8;
+  else if (upsetAmount <= 200_000)  upsetScore = 6;
+  else if (upsetAmount <= 250_000)  upsetScore = 4;
+  else if (upsetAmount <= 280_000)  upsetScore = 2;
+  else                              upsetScore = 0;
+
+  // Valuation confidence
+  const hasZillow = zillowEstimate != null;
+  const hasRedfin = redfinEstimate != null;
+  const valConfidence = (hasZillow && hasRedfin) ? 10 : (hasZillow || hasRedfin) ? 6 : 0;
+
+  const rawScore = discountScore + spreadScore + upsetScore + valConfidence;
+  const dealScore = Math.min(100, Math.round(rawScore));
 
   return {
     dealRating:      rating,
-    dealScore:       Math.min(100, score),
+    dealScore,
     estimatedSpread: Math.round(spread * 100) / 100,
-    discountPercent: Math.round(discount * 10) / 10,   // 1 decimal
+    discountPercent: Math.round(discount * 10) / 10,
     equityMultiple:  Math.round(multiple * 100) / 100,
   };
 }
 
 /**
- * Compute deal warnings from raw property fields.
- * Warnings are informational — they do NOT downgrade or exclude deals.
+ * Compute deal warnings from property fields.
+ * Warnings are informational — they do NOT exclude deals.
  */
 export function computeWarnings(opts: {
-  priorsLiensTaxes?: string | null;
   upsetAmount?: number | null;
-  estimatedMarketValue?: number | null;
+  zillowEstimate?: number | null;
+  zillowStatus?: string | null;
+  zillowFetchedAt?: Date | null;
+  redfinEstimate?: number | null;
+  redfinStatus?: string | null;
+  marketValueUsed?: number | null;
+  priorsLiensTaxes?: string | null;
   occupancyStatus?: string | null;
-  propertyValuationAvailable?: boolean;
 }): DealWarning[] {
-  const warnings: DealWarning[] = [];
-  const priors = (opts.priorsLiensTaxes ?? "").toLowerCase();
+  const warnings = new Set<DealWarning>();
+  const priors   = (opts.priorsLiensTaxes ?? "").toLowerCase();
 
-  if (!opts.upsetAmount)           warnings.push("MISSING_UPSET_AMOUNT");
-  if (!opts.estimatedMarketValue)  warnings.push("UNKNOWN_MARKET_VALUE");
-  if (!opts.propertyValuationAvailable) warnings.push("PROPERTY_DATA_MISSING");
+  // Missing data
+  if (!opts.upsetAmount)         warnings.add("MISSING_UPSET_AMOUNT");
+  if (!opts.marketValueUsed)     warnings.add("MARKET_VALUE_UNKNOWN");
+  if (opts.zillowStatus !== "SUCCESS")  warnings.add("NO_ZILLOW_ESTIMATE");
+  if (opts.redfinStatus !== "SUCCESS")  warnings.add("NO_REDFIN_ESTIMATE");
 
-  if (/tax\s+lien|tax\s+sale\s+cert/i.test(priors))    warnings.push("TAX_LIEN");
-  if (/municipal\s+lien|municipality/i.test(priors))    warnings.push("MUNICIPAL_LIEN");
-  if (/hoa|homeowner|condominium\s+assoc/i.test(priors)) warnings.push("HOA_LIEN");
-  if (/prior\s+mortgage|prior\s+lien|second\s+lien|third\s+lien/i.test(priors)) {
-    warnings.push("KNOWN_PRIOR_LIEN");
+  // Stale Zillow (> 7 days old)
+  if (opts.zillowStatus === "SUCCESS" && opts.zillowFetchedAt) {
+    const ageDays = (Date.now() - opts.zillowFetchedAt.getTime()) / 86_400_000;
+    if (ageDays > 7) warnings.add("VALUATION_STALE");
   }
 
-  const occupancy = (opts.occupancyStatus ?? "").toLowerCase();
-  if (/owner\s*occupied/i.test(occupancy)) warnings.push("OWNER_OCCUPIED");
+  // Valuations differ significantly (> 15%)
+  if (opts.zillowEstimate != null && opts.redfinEstimate != null) {
+    const diff = Math.abs(opts.zillowEstimate - opts.redfinEstimate);
+    const pct  = diff / Math.min(opts.zillowEstimate, opts.redfinEstimate);
+    if (pct > 0.15) warnings.add("VALUATIONS_DIFFER_SIGNIFICANTLY");
+  }
 
-  return [...new Set(warnings)]; // deduplicate
+  // Negative spread
+  if (opts.marketValueUsed != null && opts.upsetAmount != null && opts.marketValueUsed < opts.upsetAmount) {
+    warnings.add("NEGATIVE_SPREAD");
+  }
+
+  // Lien flags
+  if (/tax\s+lien|tax\s+sale\s+cert/i.test(priors))              warnings.add("TAX_LIEN");
+  if (/municipal\s+lien|municipality/i.test(priors))              warnings.add("MUNICIPAL_LIEN");
+  if (/hoa|homeowner|condominium\s+assoc/i.test(priors))          warnings.add("HOA_LIEN");
+  if (/prior\s+mortgage|prior\s+lien|second\s+lien|third\s+lien/i.test(priors)) {
+    warnings.add("KNOWN_PRIOR_LIEN");
+  }
+
+  // Occupancy
+  if (/owner\s*occupied/i.test(opts.occupancyStatus ?? "")) warnings.add("OWNER_OCCUPIED");
+
+  return [...warnings];
 }

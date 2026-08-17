@@ -3,9 +3,8 @@ import { query } from "../db.js";
 
 export const exportRouter = Router();
 
-// Rating sort order: EXTREME first, then MAJOR, STRONG, NORMAL, UNKNOWN
 const RATING_ORDER = `
-  CASE f.deal_rating
+  CASE deal_rating
     WHEN 'EXTREME' THEN 1
     WHEN 'MAJOR'   THEN 2
     WHEN 'STRONG'  THEN 3
@@ -16,28 +15,28 @@ const RATING_ORDER = `
 
 /**
  * GET /api/export/google-sheets
- * Returns a flat array of arrays, Google Apps Script-friendly.
- * First row is the header.
- *
+ * Flat array of arrays for Google Apps Script import.
+ * Row 0 = headers.
  * Sort: EXTREME → MAJOR → STRONG → NORMAL → UNKNOWN, then deal_score DESC.
  */
 exportRouter.get("/google-sheets", async (_req, res) => {
   try {
     const rows = await query(
-      `SELECT f.sheriff_number, f.court_case_number, f.current_sale_date,
-              f.plaintiff, f.defendant,
-              CONCAT_WS(', ', f.address, f.city, f.state, f.zip_code) as full_address,
-              f.foreclosure_type, f.approx_judgment, f.upset_amount,
-              pv.estimated_market_value,
-              f.estimated_spread, f.discount_percent, f.equity_multiple,
-              f.deal_rating, f.deal_score, f.deal_warnings,
-              f.priors_liens_taxes, f.attorney, f.occupancy_status,
-              f.google_maps_url, f.zillow_url, f.detail_url,
-              f.valuation_status, f.last_updated
-       FROM foreclosures f
-       LEFT JOIN property_values pv ON pv.sheriff_number = f.sheriff_number
-       WHERE f.is_removed = FALSE
-       ORDER BY ${RATING_ORDER}, f.deal_score DESC NULLS LAST`,
+      `SELECT sheriff_number, court_case_number, current_sale_date,
+              plaintiff, defendant,
+              CONCAT_WS(', ', address, city, state, zip_code) AS full_address,
+              foreclosure_type, approx_judgment, upset_amount,
+              zillow_estimate, zillow_status,
+              redfin_estimate, redfin_status,
+              market_value_used, market_value_source,
+              estimated_spread, discount_percent, equity_multiple,
+              deal_rating, deal_score, deal_warnings,
+              priors_liens_taxes, attorney, occupancy_status,
+              google_maps_url, zillow_url, redfin_property_url, detail_url,
+              valuation_updated_at, last_updated
+       FROM foreclosures
+       WHERE is_removed = FALSE
+       ORDER BY ${RATING_ORDER}, deal_score DESC NULLS LAST`,
     );
 
     const headers = [
@@ -50,7 +49,12 @@ exportRouter.get("/google-sheets", async (_req, res) => {
       "Foreclosure Type",
       "Approx Judgment",
       "Upset Amount",
-      "Estimated Market Value",
+      "Zillow Estimate",
+      "Zillow Status",
+      "Redfin Estimate",
+      "Redfin Status",
+      "Market Value Used",
+      "Market Value Source",
       "Potential Spread",
       "Discount %",
       "Equity Multiple",
@@ -62,12 +66,15 @@ exportRouter.get("/google-sheets", async (_req, res) => {
       "Occupancy",
       "Google Maps",
       "Zillow Search",
+      "Redfin Search",
       "CivilView URL",
-      "Valuation Status",
+      "Valuation Updated",
       "Last Updated",
     ];
 
-    const data = rows.map((r: Record<string, unknown>) => [
+    const num = (v: unknown) => (v != null ? parseFloat(String(v)) : null);
+
+    const data = (rows as Record<string, unknown>[]).map((r) => [
       r["sheriff_number"],
       r["court_case_number"],
       r["current_sale_date"],
@@ -75,22 +82,28 @@ exportRouter.get("/google-sheets", async (_req, res) => {
       r["defendant"],
       r["full_address"],
       r["foreclosure_type"],
-      r["approx_judgment"] != null ? parseFloat(String(r["approx_judgment"])) : null,
-      r["upset_amount"]    != null ? parseFloat(String(r["upset_amount"]))    : null,
-      r["estimated_market_value"] != null ? parseFloat(String(r["estimated_market_value"])) : null,
-      r["estimated_spread"]  != null ? parseFloat(String(r["estimated_spread"]))  : null,
-      r["discount_percent"]  != null ? parseFloat(String(r["discount_percent"]))  : null,
-      r["equity_multiple"]   != null ? parseFloat(String(r["equity_multiple"]))   : null,
+      num(r["approx_judgment"]),
+      num(r["upset_amount"]),
+      num(r["zillow_estimate"]),
+      r["zillow_status"],
+      num(r["redfin_estimate"]),
+      r["redfin_status"],
+      num(r["market_value_used"]),
+      r["market_value_source"],
+      num(r["estimated_spread"]),
+      num(r["discount_percent"]),
+      num(r["equity_multiple"]),
       r["deal_rating"],
-      r["deal_score"] != null ? parseFloat(String(r["deal_score"])) : null,
+      num(r["deal_score"]),
       Array.isArray(r["deal_warnings"]) ? (r["deal_warnings"] as string[]).join(", ") : "",
       r["priors_liens_taxes"],
       r["attorney"],
       r["occupancy_status"],
       r["google_maps_url"],
       r["zillow_url"],
+      r["redfin_property_url"],
       r["detail_url"],
-      r["valuation_status"],
+      r["valuation_updated_at"],
       r["last_updated"],
     ]);
 

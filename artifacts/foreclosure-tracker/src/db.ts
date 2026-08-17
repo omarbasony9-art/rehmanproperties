@@ -111,19 +111,28 @@ export async function initDb(): Promise<void> {
   `);
 
   // Migrations — safe to run on every startup
-  await query(`
-    ALTER TABLE foreclosures
-      ADD COLUMN IF NOT EXISTS valuation_status TEXT DEFAULT 'UNKNOWN'
-  `);
+  await query(`ALTER TABLE foreclosures ADD COLUMN IF NOT EXISTS valuation_status TEXT DEFAULT 'UNKNOWN'`);
 
-  // Fix: spec requires dealScore=null (not 0) when rating is UNKNOWN
+  // Zillow / Redfin dual-source valuation columns
+  await query(`ALTER TABLE foreclosures ADD COLUMN IF NOT EXISTS zillow_estimate     NUMERIC`);
+  await query(`ALTER TABLE foreclosures ADD COLUMN IF NOT EXISTS zillow_fetched_at   TIMESTAMPTZ`);
+  await query(`ALTER TABLE foreclosures ADD COLUMN IF NOT EXISTS zillow_status       TEXT DEFAULT 'NOT_CONFIGURED'`);
+  await query(`ALTER TABLE foreclosures ADD COLUMN IF NOT EXISTS redfin_estimate     NUMERIC`);
+  await query(`ALTER TABLE foreclosures ADD COLUMN IF NOT EXISTS redfin_fetched_at   TIMESTAMPTZ`);
+  await query(`ALTER TABLE foreclosures ADD COLUMN IF NOT EXISTS redfin_status       TEXT DEFAULT 'NOT_CONFIGURED'`);
+  await query(`ALTER TABLE foreclosures ADD COLUMN IF NOT EXISTS market_value_used   NUMERIC`);
+  await query(`ALTER TABLE foreclosures ADD COLUMN IF NOT EXISTS market_value_source TEXT DEFAULT 'NONE'`);
+  await query(`ALTER TABLE foreclosures ADD COLUMN IF NOT EXISTS valuation_updated_at TIMESTAMPTZ`);
+  await query(`ALTER TABLE foreclosures ADD COLUMN IF NOT EXISTS redfin_property_url TEXT`);
+  await query(`ALTER TABLE foreclosures ADD COLUMN IF NOT EXISTS zillow_property_url TEXT`);
+
+  // dealScore must be null (not 0) when rating is UNKNOWN
   await query(`
-    UPDATE foreclosures
-    SET deal_score = NULL
+    UPDATE foreclosures SET deal_score = NULL
     WHERE deal_rating = 'UNKNOWN' AND (deal_score = 0 OR deal_score IS NULL)
   `);
 
-  // Rename old warning value NO_UPSET_AMOUNT → MISSING_UPSET_AMOUNT
+  // Rename old warning values
   await query(`
     UPDATE foreclosures
     SET deal_warnings = array_replace(deal_warnings, 'NO_UPSET_AMOUNT', 'MISSING_UPSET_AMOUNT')

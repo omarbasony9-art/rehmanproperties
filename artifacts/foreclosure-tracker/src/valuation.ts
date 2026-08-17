@@ -1,47 +1,50 @@
 /**
- * Property valuation provider abstraction.
- * Currently supports RentCast via RENTCAST_API_KEY.
- * Cache TTL: 7 days per property.
+ * Valuation orchestrator.
  *
- * valuationStatus values:
- *   SUCCESS    — RentCast returned a price estimate
- *   NOT_FOUND  — RentCast could not identify the property
- *   ERROR      — Network/API error
- *   SKIPPED    — No API key configured, or upset_amount > $280k threshold
- *   UNKNOWN    — Not yet attempted
+ * Coordinates Zillow + Redfin providers, calculates market value,
+ * scores the deal, and persists everything to the foreclosures table.
+ *
+ * Key rules:
+ * - Zillow is the automated source (7-day cache).
+ * - Redfin is manual-only via PATCH /api/foreclosures/:id/valuation/redfin.
+ * - Market value = conservative minimum of available estimates.
+ * - Never converts null to 0.
+ * - Deal listing is visible regardless of valuation outcome.
  */
 
 import { query } from "./db.js";
+import { fetchZillowEstimate } from "./services/valuation/zillow.js";
+import { buildRedfinSearchUrl } from "./services/valuation/redfin.js";
+import { calculateMarketValue } from "./services/valuation/market-value.js";
+import { scoreDeal, computeWarnings } from "./deals.js";
 
-const CACHE_TTL_DAYS = 7;
+const ZILLOW_CACHE_DAYS = 7;
+const UPSET_THRESHOLD   = 280_000;
 
-export type ValuationStatus = "SUCCESS" | "NOT_FOUND" | "ERROR" | "SKIPPED" | "UNKNOWN";
-
-export interface ValuationResult {
-  estimatedMarketValue: number | null;
-  activeListingPrice: number | null;
-  lastSalePrice: number | null;
-  lastSaleDate: string | null;
-  taxAssessedValue: number | null;
-  bedrooms: number | null;
-  bathrooms: number | null;
-  squareFeet: number | null;
-  yearBuilt: number | null;
-  propertyType: string | null;
-  comparableSales: unknown[] | null;
-  valuationStatus: ValuationStatus;
-  provider: string;
-  fetchedAt: string;
+/** Property row subset needed for valuation */
+interface PropRow {
+  sheriff_number:      string;
+  address:             string | null;
+  city:                string | null;
+  state:               string | null;
+  zip_code:            string | null;
+  upset_amount:        string | null;
+  priors_liens_taxes:  string | null;
+  occupancy_status:    string | null;
+  zillow_estimate:     string | null;
+  zillow_fetched_at:   Date | null;
+  zillow_status:       string | null;
+  redfin_estimate:     string | null;
+  redfin_fetched_at:   Date | null;
+  redfin_status:       string | null;
 }
 
 /**
- * Look up property valuation.
+ * Fetch Zillow estimate and recalculate deal for a property.
+ * Respects 7-day cache unless force=true.
+ * Does NOT require upsetAmount threshold — that is the caller's responsibility.
  *
- * Returns cached value if available and fresh (< 7 days old).
- * Returns null if no API key configured or lookup fails.
- *
- * The caller is responsible for the upsetAmount threshold check —
- * this function always attempts if called.
+ * @returns "fetched" | "cached" | "skipped" | "error"
  */
 export async function lookupValuation(
   sheriffNumber: string,
@@ -49,293 +52,162 @@ export async function lookupValuation(
   city: string,
   state: string,
   zip: string,
-): Promise<ValuationResult | null> {
-  // Check DB cache first
-  const cached = await getCached(sheriffNumber);
-  if (cached) return cached;
-
-  const apiKey = process.env["RENTCAST_API_KEY"];
+  force = false,
+): Promise<"fetched" | "cached" | "skipped" | "error"> {
+  const apiKey = process.env["ZILLOW_RAPIDAPI_KEY"];
   if (!apiKey) {
-    console.log(`[valuation] No RENTCAST_API_KEY — skipping ${sheriffNumber}`);
-    await setValuationStatus(sheriffNumber, "SKIPPED");
-    return null;
+    // No Zillow credentials — update status and exit cleanly
+    await query(
+      `UPDATE foreclosures SET zillow_status='NOT_CONFIGURED', last_updated=NOW()
+       WHERE sheriff_number=$1`,
+      [sheriffNumber],
+    );
+    return "skipped";
   }
 
-  const result = await fetchRentCast(apiKey, address, city, state, zip);
-  if (result) {
-    await upsertCache(sheriffNumber, result);
-    await setValuationStatus(sheriffNumber, result.valuationStatus);
+  if (!force) {
+    // Check cache
+    const cached = await query<{ zillow_fetched_at: Date | null; zillow_status: string | null }>(
+      `SELECT zillow_fetched_at, zillow_status FROM foreclosures WHERE sheriff_number=$1`,
+      [sheriffNumber],
+    );
+    const row = cached[0];
+    if (row?.zillow_fetched_at && row.zillow_status === "SUCCESS") {
+      const ageDays = (Date.now() - row.zillow_fetched_at.getTime()) / 86_400_000;
+      if (ageDays < ZILLOW_CACHE_DAYS) {
+        return "cached";
+      }
+    }
   }
-  return result;
+
+  try {
+    const result = await fetchZillowEstimate(address, city, state, zip);
+
+    await query(
+      `UPDATE foreclosures SET
+         zillow_estimate=$2, zillow_fetched_at=$3, zillow_status=$4,
+         zillow_property_url=COALESCE($5, zillow_property_url),
+         last_updated=NOW()
+       WHERE sheriff_number=$1`,
+      [
+        sheriffNumber,
+        result.estimate,
+        result.fetchedAt,
+        result.status,
+        result.propertyUrl,
+      ],
+    );
+
+    await recalculateDeal(sheriffNumber);
+    return result.status === "SUCCESS" ? "fetched" : "skipped";
+  } catch (err) {
+    console.error(`[valuation] lookupValuation error for ${sheriffNumber}:`, err);
+    await query(
+      `UPDATE foreclosures SET zillow_status='ERROR', last_updated=NOW() WHERE sheriff_number=$1`,
+      [sheriffNumber],
+    );
+    return "error";
+  }
 }
 
 /**
- * Manually trigger valuation for a specific property regardless of upset threshold.
- * Used by POST /api/foreclosures/:sheriffNumber/valuation.
+ * Run bulk Zillow refresh for all qualifying properties.
+ * upsetAmount <= UPSET_THRESHOLD only (unless force includes all).
  */
-export async function forceValuation(
-  sheriffNumber: string,
-  address: string,
-  city: string,
-  state: string,
-  zip: string,
-  force = false,
-): Promise<{ result: ValuationResult | null; status: ValuationStatus }> {
-  if (!force) {
-    // Still respect the 7-day cache unless force=true
-    const cached = await getCached(sheriffNumber);
-    if (cached) return { result: cached, status: cached.valuationStatus };
-  }
+export async function runBulkZillowRefresh(force = false): Promise<{
+  total: number; fetched: number; cached: number; skipped: number; errors: number;
+}> {
+  const rows = await query<PropRow>(
+    `SELECT sheriff_number, address, city, state, zip_code, upset_amount,
+            priors_liens_taxes, occupancy_status,
+            zillow_estimate, zillow_fetched_at, zillow_status,
+            redfin_estimate, redfin_fetched_at, redfin_status
+     FROM foreclosures
+     WHERE is_removed = FALSE
+       AND upset_amount IS NOT NULL
+       AND upset_amount <= $1
+       AND address IS NOT NULL
+       AND city IS NOT NULL
+     ORDER BY upset_amount ASC`,
+    [UPSET_THRESHOLD],
+  );
 
-  const apiKey = process.env["RENTCAST_API_KEY"];
-  if (!apiKey) {
-    return { result: null, status: "SKIPPED" };
-  }
+  const stats = { total: rows.length, fetched: 0, cached: 0, skipped: 0, errors: 0 };
 
-  const result = await fetchRentCast(apiKey, address, city, state, zip);
-  const status: ValuationStatus = result?.valuationStatus ?? "ERROR";
-  if (result) {
-    await upsertCache(sheriffNumber, result);
-  }
-  await setValuationStatus(sheriffNumber, status);
-  return { result, status };
-}
-
-async function setValuationStatus(sheriffNumber: string, status: ValuationStatus): Promise<void> {
-  try {
-    await query(
-      `UPDATE foreclosures SET valuation_status=$2, last_updated=NOW() WHERE sheriff_number=$1`,
-      [sheriffNumber, status],
+  for (const prop of rows) {
+    if (!prop.address || !prop.city || !prop.state || !prop.zip_code) { stats.skipped++; continue; }
+    const outcome = await lookupValuation(
+      prop.sheriff_number, prop.address, prop.city, prop.state, prop.zip_code, force,
     );
-  } catch (err) {
-    console.error("[valuation] Status update error:", err);
+    if (outcome === "fetched")  stats.fetched++;
+    else if (outcome === "cached")  stats.cached++;
+    else if (outcome === "error")   stats.errors++;
+    else                            stats.skipped++;
+    // Small delay to avoid rate limits
+    await sleep(300);
   }
+
+  return stats;
 }
 
-async function getCached(sheriffNumber: string): Promise<ValuationResult | null> {
-  try {
-    const rows = await query<{
-      estimated_market_value: string | null;
-      active_listing_price:   string | null;
-      last_sale_price:        string | null;
-      last_sale_date:         string | null;
-      tax_assessed_value:     string | null;
-      bedrooms:               string | null;
-      bathrooms:              string | null;
-      square_feet:            string | null;
-      year_built:             string | null;
-      property_type:          string | null;
-      comparable_sales:       unknown[] | null;
-      provider:               string;
-      fetched_at:             Date;
-      valuation_status:       string | null;
-    }>(
-      `SELECT pv.*, f.valuation_status
-       FROM property_values pv
-       JOIN foreclosures f ON f.sheriff_number = pv.sheriff_number
-       WHERE pv.sheriff_number = $1
-         AND pv.fetched_at > NOW() - INTERVAL '${CACHE_TTL_DAYS} days'`,
-      [sheriffNumber],
-    );
+/**
+ * Recalculate market value, spread, discount, score, rating, and warnings
+ * from the currently stored zillow_estimate + redfin_estimate.
+ * Call after any valuation change.
+ */
+export async function recalculateDeal(sheriffNumber: string): Promise<void> {
+  const rows = await query<PropRow>(
+    `SELECT sheriff_number, address, city, state, zip_code, upset_amount,
+            priors_liens_taxes, occupancy_status,
+            zillow_estimate, zillow_fetched_at, zillow_status,
+            redfin_estimate, redfin_fetched_at, redfin_status
+     FROM foreclosures WHERE sheriff_number=$1`,
+    [sheriffNumber],
+  );
+  if (!rows.length) return;
+  const prop = rows[0]!;
 
-    if (!rows.length) return null;
-    const r = rows[0]!;
-    return {
-      estimatedMarketValue: r.estimated_market_value ? parseFloat(r.estimated_market_value) : null,
-      activeListingPrice:   r.active_listing_price   ? parseFloat(r.active_listing_price)   : null,
-      lastSalePrice:        r.last_sale_price         ? parseFloat(r.last_sale_price)         : null,
-      lastSaleDate:         r.last_sale_date,
-      taxAssessedValue:     r.tax_assessed_value      ? parseFloat(r.tax_assessed_value)      : null,
-      bedrooms:             r.bedrooms                ? parseFloat(r.bedrooms)                : null,
-      bathrooms:            r.bathrooms               ? parseFloat(r.bathrooms)               : null,
-      squareFeet:           r.square_feet             ? parseFloat(r.square_feet)             : null,
-      yearBuilt:            r.year_built              ? parseFloat(r.year_built)              : null,
-      propertyType:         r.property_type,
-      comparableSales:      r.comparable_sales,
-      valuationStatus:      (r.valuation_status as ValuationStatus) ?? "SUCCESS",
-      provider:             r.provider,
-      fetchedAt:            r.fetched_at.toISOString(),
-    };
-  } catch (err) {
-    console.error("[valuation] Cache read error:", err);
-    return null;
-  }
+  const upsetAmount    = prop.upset_amount     ? parseFloat(prop.upset_amount)    : null;
+  const zillowEstimate = prop.zillow_estimate  ? parseFloat(prop.zillow_estimate) : null;
+  const redfinEstimate = prop.redfin_estimate  ? parseFloat(prop.redfin_estimate) : null;
+
+  const { marketValueUsed, marketValueSource } = calculateMarketValue(zillowEstimate, redfinEstimate);
+  const metrics  = scoreDeal(upsetAmount, marketValueUsed, zillowEstimate, redfinEstimate);
+  const warnings = computeWarnings({
+    upsetAmount,
+    zillowEstimate,
+    zillowStatus:    prop.zillow_status,
+    zillowFetchedAt: prop.zillow_fetched_at ? new Date(prop.zillow_fetched_at) : null,
+    redfinEstimate,
+    redfinStatus:    prop.redfin_status,
+    marketValueUsed,
+    priorsLiensTaxes: prop.priors_liens_taxes,
+    occupancyStatus:  prop.occupancy_status,
+  });
+
+  // Build redfin search URL if not already stored
+  const redfinSearchUrl = (prop.address && prop.city && prop.state && prop.zip_code)
+    ? buildRedfinSearchUrl(prop.address, prop.city, prop.state, prop.zip_code)
+    : null;
+
+  await query(
+    `UPDATE foreclosures SET
+       market_value_used=$2, market_value_source=$3,
+       estimated_spread=$4, discount_percent=$5, equity_multiple=$6,
+       deal_rating=$7, deal_score=$8, deal_warnings=$9,
+       redfin_property_url=COALESCE(redfin_property_url, $10),
+       valuation_updated_at=NOW(), last_updated=NOW()
+     WHERE sheriff_number=$1`,
+    [
+      sheriffNumber,
+      marketValueUsed, marketValueSource,
+      metrics.estimatedSpread, metrics.discountPercent, metrics.equityMultiple,
+      metrics.dealRating, metrics.dealScore, warnings,
+      redfinSearchUrl,
+    ],
+  );
 }
 
-async function fetchRentCast(
-  apiKey: string,
-  address: string,
-  city: string,
-  state: string,
-  zip: string,
-): Promise<ValuationResult | null> {
-  // Normalize address for RentCast
-  const normalizedAddress = `${address.trim()}, ${city.trim()}, ${state.trim()} ${zip.trim()}`;
-
-  try {
-    // Primary: AVM (automated valuation model)
-    const avmParams = new URLSearchParams({
-      address:      normalizedAddress,
-      propertyType: "Single Family",
-      compCount:    "5",
-    });
-
-    const avmResp = await fetch(
-      `https://api.rentcast.io/v1/properties/value?${avmParams}`,
-      { headers: { "X-Api-Key": apiKey, Accept: "application/json" } },
-    );
-
-    if (avmResp.status === 404 || avmResp.status === 422) {
-      console.warn(`[valuation] RentCast property not found: ${normalizedAddress}`);
-      return {
-        estimatedMarketValue: null,
-        activeListingPrice:   null,
-        lastSalePrice:        null,
-        lastSaleDate:         null,
-        taxAssessedValue:     null,
-        bedrooms:             null,
-        bathrooms:            null,
-        squareFeet:           null,
-        yearBuilt:            null,
-        propertyType:         null,
-        comparableSales:      null,
-        valuationStatus:      "NOT_FOUND",
-        provider:             "rentcast",
-        fetchedAt:            new Date().toISOString(),
-      };
-    }
-
-    if (!avmResp.ok) {
-      console.warn(`[valuation] RentCast AVM ${avmResp.status} for ${normalizedAddress}`);
-      return {
-        estimatedMarketValue: null,
-        activeListingPrice:   null,
-        lastSalePrice:        null,
-        lastSaleDate:         null,
-        taxAssessedValue:     null,
-        bedrooms:             null,
-        bathrooms:            null,
-        squareFeet:           null,
-        yearBuilt:            null,
-        propertyType:         null,
-        comparableSales:      null,
-        valuationStatus:      "ERROR",
-        provider:             "rentcast",
-        fetchedAt:            new Date().toISOString(),
-      };
-    }
-
-    const avmData = (await avmResp.json()) as Record<string, unknown>;
-
-    // Secondary: property details (bedrooms/baths/sqft)
-    let detail: Record<string, unknown> = {};
-    try {
-      const detailParams = new URLSearchParams({ address: normalizedAddress });
-      const detailResp = await fetch(
-        `https://api.rentcast.io/v1/properties?${detailParams}`,
-        { headers: { "X-Api-Key": apiKey, Accept: "application/json" } },
-      );
-      if (detailResp.ok) {
-        const detailData = await detailResp.json() as unknown;
-        if (Array.isArray(detailData) && detailData.length > 0) {
-          detail = detailData[0] as Record<string, unknown>;
-        }
-      }
-    } catch {
-      // Non-fatal — AVM data is sufficient for deal scoring
-    }
-
-    return {
-      estimatedMarketValue: numOrNull(avmData["price"]),
-      activeListingPrice:   numOrNull(detail["listPrice"]),
-      lastSalePrice:        numOrNull(detail["lastSalePrice"]),
-      lastSaleDate:         strOrNull(detail["lastSaleDate"]),
-      taxAssessedValue:     numOrNull(detail["assessedValue"]),
-      bedrooms:             numOrNull(detail["bedrooms"]),
-      bathrooms:            numOrNull(detail["bathrooms"]),
-      squareFeet:           numOrNull(detail["squareFootage"]),
-      yearBuilt:            numOrNull(detail["yearBuilt"]),
-      propertyType:         strOrNull(detail["propertyType"]),
-      comparableSales:      Array.isArray(avmData["comparables"]) ? (avmData["comparables"] as unknown[]) : null,
-      valuationStatus:      "SUCCESS",
-      provider:             "rentcast",
-      fetchedAt:            new Date().toISOString(),
-    };
-  } catch (err) {
-    console.error("[valuation] RentCast fetch error:", err);
-    return {
-      estimatedMarketValue: null,
-      activeListingPrice:   null,
-      lastSalePrice:        null,
-      lastSaleDate:         null,
-      taxAssessedValue:     null,
-      bedrooms:             null,
-      bathrooms:            null,
-      squareFeet:           null,
-      yearBuilt:            null,
-      propertyType:         null,
-      comparableSales:      null,
-      valuationStatus:      "ERROR",
-      provider:             "rentcast",
-      fetchedAt:            new Date().toISOString(),
-    };
-  }
-}
-
-async function upsertCache(
-  sheriffNumber: string,
-  v: ValuationResult,
-): Promise<void> {
-  try {
-    await query(
-      `INSERT INTO property_values
-         (sheriff_number, estimated_market_value, active_listing_price, last_sale_price,
-          last_sale_date, tax_assessed_value, bedrooms, bathrooms, square_feet, year_built,
-          property_type, comparable_sales, provider, fetched_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,NOW())
-       ON CONFLICT (sheriff_number) DO UPDATE SET
-         estimated_market_value = EXCLUDED.estimated_market_value,
-         active_listing_price   = EXCLUDED.active_listing_price,
-         last_sale_price        = EXCLUDED.last_sale_price,
-         last_sale_date         = EXCLUDED.last_sale_date,
-         tax_assessed_value     = EXCLUDED.tax_assessed_value,
-         bedrooms               = EXCLUDED.bedrooms,
-         bathrooms              = EXCLUDED.bathrooms,
-         square_feet            = EXCLUDED.square_feet,
-         year_built             = EXCLUDED.year_built,
-         property_type          = EXCLUDED.property_type,
-         comparable_sales       = EXCLUDED.comparable_sales,
-         provider               = EXCLUDED.provider,
-         fetched_at             = NOW()`,
-      [
-        sheriffNumber,
-        v.estimatedMarketValue,
-        v.activeListingPrice,
-        v.lastSalePrice,
-        v.lastSaleDate,
-        v.taxAssessedValue,
-        v.bedrooms,
-        v.bathrooms,
-        v.squareFeet,
-        v.yearBuilt,
-        v.propertyType,
-        v.comparableSales ? JSON.stringify(v.comparableSales) : null,
-        v.provider,
-      ],
-    );
-  } catch (err) {
-    console.error("[valuation] Cache write error:", err);
-  }
-}
-
-function numOrNull(v: unknown): number | null {
-  if (v == null) return null;
-  const n = typeof v === "number" ? v : parseFloat(String(v));
-  return isNaN(n) ? null : n;
-}
-
-function strOrNull(v: unknown): string | null {
-  if (v == null) return null;
-  const s = String(v).trim();
-  return s || null;
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
 }
