@@ -19,7 +19,7 @@
 
 import { Router, type Request, type Response } from "express";
 import { query } from "../db.js";
-import { lookupValuation, lookupRedfinValuation, recalculateDeal, runBulkZillowRefresh, runBulkRedfinRefresh } from "../valuation.js";
+import { lookupValuation, lookupRedfinValuation, lookupRentcastValuation, recalculateDeal, runBulkZillowRefresh, runBulkRedfinRefresh, runBulkRentcastRefresh } from "../valuation.js";
 
 export const valuationsRouter = Router();
 
@@ -244,6 +244,77 @@ valuationsRouter.post(
       console.error(`[POST /recalculate/${sheriffNumber}]`, err);
       res.status(500).json({ error: "Recalculation failed" });
     }
+  },
+);
+
+// ── Single property: RentCast AVM ─────────────────────────────────────────────
+
+valuationsRouter.post(
+  "/foreclosures/:sheriffNumber/valuation/rentcast",
+  async (req: Request, res: Response): Promise<void> => {
+    const sheriffNumber = String(req.params["sheriffNumber"]).toUpperCase();
+    const force         = req.query["force"] === "true";
+
+    const rows = await query<{
+      sheriff_number: string;
+      address: string | null;
+      city: string | null;
+      state: string | null;
+      zip_code: string | null;
+    }>(
+      `SELECT sheriff_number, address, city, state, zip_code FROM foreclosures WHERE sheriff_number=$1`,
+      [sheriffNumber],
+    );
+
+    if (!rows.length) { res.status(404).json({ error: "Foreclosure not found" }); return; }
+    const prop = rows[0]!;
+    if (!prop.address || !prop.city || !prop.state || !prop.zip_code) {
+      res.status(422).json({ error: "Property has incomplete address" }); return;
+    }
+
+    try {
+      const outcome = await lookupRentcastValuation(
+        sheriffNumber, prop.address, prop.city, prop.state, prop.zip_code, force,
+      );
+      const updated = await query(
+        `SELECT rentcast_estimate, rentcast_status, rentcast_fetched_at,
+                zillow_estimate, zillow_status, redfin_estimate, redfin_status,
+                market_value_used, market_value_source,
+                estimated_spread, discount_percent, equity_multiple,
+                deal_rating, deal_score, deal_warnings, valuation_updated_at
+         FROM foreclosures WHERE sheriff_number=$1`,
+        [sheriffNumber],
+      );
+      res.json({ sheriffNumber, outcome, ...updated[0] });
+    } catch (err) {
+      console.error(`[POST /valuation/rentcast/${sheriffNumber}]`, err);
+      res.status(500).json({ error: "RentCast valuation request failed" });
+    }
+  },
+);
+
+// ── Bulk RentCast refresh ─────────────────────────────────────────────────────
+
+valuationsRouter.post(
+  "/valuations/rentcast-refresh",
+  async (req: Request, res: Response): Promise<void> => {
+    const secret = process.env["REFRESH_SECRET"];
+    if (!secret) { res.status(503).json({ error: "REFRESH_SECRET not configured" }); return; }
+    const auth = req.headers["authorization"] ?? "";
+    if (auth !== `Bearer ${secret}`) { res.status(401).json({ error: "Unauthorized" }); return; }
+    if (!process.env["RENTCAST_API_KEY"]) {
+      res.status(503).json({ error: "RENTCAST_API_KEY not configured" }); return;
+    }
+
+    const force       = req.query["force"]       === "true";
+    const noThreshold = req.query["noThreshold"] === "true";
+    res.json({ status: "rentcast_refresh_started", force, noThreshold });
+
+    runBulkRentcastRefresh(force, noThreshold).then((stats) => {
+      console.log("[valuations/rentcast-refresh] Done:", stats);
+    }).catch((err) => {
+      console.error("[valuations/rentcast-refresh] Error:", err);
+    });
   },
 );
 

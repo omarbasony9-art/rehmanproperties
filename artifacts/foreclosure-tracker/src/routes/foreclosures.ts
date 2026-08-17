@@ -19,7 +19,10 @@ foreclosuresRouter.get("/", async (req, res) => {
     const pageLimit = Math.min(200, Math.max(1, parseInt(String(req.query["limit"] ?? "50"))));
     const offset    = (page - 1) * pageLimit;
 
-    const conditions: string[] = ["is_removed = FALSE"];
+    const conditions: string[] = [
+      "is_removed = FALSE",
+      "permanently_excluded IS NOT TRUE",
+    ];
     const params: unknown[] = [];
     let pi = 1;
 

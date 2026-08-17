@@ -23,6 +23,7 @@ function sleep(ms: number): Promise<void> {
 }
 
 interface StoredStub {
+  permanentlyExcluded: boolean;
   sheriffNumber: string;
   currentSaleDate: string | null;
   lastDetailCheck: Date | null;
@@ -78,16 +79,17 @@ export async function runRefresh(): Promise<RefreshResult> {
     `SELECT sheriff_number as "sheriffNumber",
             current_sale_date as "currentSaleDate",
             last_detail_check as "lastDetailCheck",
-            is_removed as "isRemoved"
+            is_removed as "isRemoved",
+            COALESCE(permanently_excluded, FALSE) as "permanentlyExcluded"
      FROM foreclosures`,
   );
 
   const existingMap  = new Map<string, StoredStub>(existing.map((r) => [r.sheriffNumber, r]));
   const activeInList = new Set(stubs.map((s) => s.sheriffNumber));
 
-  // Mark removed properties
+  // Mark removed properties (skip permanently_excluded — they stay hidden regardless)
   for (const stored of existing) {
-    if (!activeInList.has(stored.sheriffNumber) && !stored.isRemoved) {
+    if (!activeInList.has(stored.sheriffNumber) && !stored.isRemoved && !stored.permanentlyExcluded) {
       await query(
         `UPDATE foreclosures SET is_removed=TRUE, last_changed=NOW() WHERE sheriff_number=$1`,
         [stored.sheriffNumber],

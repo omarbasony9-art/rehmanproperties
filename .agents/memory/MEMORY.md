@@ -4,3 +4,5 @@
 - [Replit path-prefix routing](replit-path-prefix.md) — Replit proxy passes full path (e.g. /foreclosure-tracker/api/health) to the service; Express must strip the prefix with middleware or routes 404.
 - [Zillow private-zillow API endpoints](zillow-private-api.md) — /autocomplete→zpid then /byzpid→zestimate; city normalization strips "Township/Twp" suffixes for NJ addresses.
 - [Redfin redfin-com-data API endpoints](redfin-rapidapi.md) — /properties/auto-complete→url then /property/detail→priceInfo.amount only when label="Redfin Estimate".
+- [Permanently excluded properties](permanently-excluded.md) — `permanently_excluded` column keeps Fairway Lane timeshares and scraper-restored vacant lots hidden permanently.
+- [RentCast AVM integration](rentcast-avm.md) — third valuation source; address+state-only query handles garbled-city (unit number in city field) properties; 500ms between calls.

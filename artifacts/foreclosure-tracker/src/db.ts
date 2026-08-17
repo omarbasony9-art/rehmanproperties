@@ -125,6 +125,12 @@ export async function initDb(): Promise<void> {
   await query(`ALTER TABLE foreclosures ADD COLUMN IF NOT EXISTS valuation_updated_at TIMESTAMPTZ`);
   await query(`ALTER TABLE foreclosures ADD COLUMN IF NOT EXISTS redfin_property_url TEXT`);
   await query(`ALTER TABLE foreclosures ADD COLUMN IF NOT EXISTS zillow_property_url TEXT`);
+  // Manually excluded properties are hidden from all views and never re-activated by the scraper
+  await query(`ALTER TABLE foreclosures ADD COLUMN IF NOT EXISTS permanently_excluded BOOLEAN DEFAULT FALSE`);
+  // RentCast AVM — third valuation source, used when Zillow + Redfin both unavailable
+  await query(`ALTER TABLE foreclosures ADD COLUMN IF NOT EXISTS rentcast_estimate    NUMERIC`);
+  await query(`ALTER TABLE foreclosures ADD COLUMN IF NOT EXISTS rentcast_fetched_at  TIMESTAMPTZ`);
+  await query(`ALTER TABLE foreclosures ADD COLUMN IF NOT EXISTS rentcast_status      TEXT`);
 
   // dealScore must be null (not 0) when rating is UNKNOWN
   await query(`

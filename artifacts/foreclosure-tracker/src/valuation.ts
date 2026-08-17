@@ -15,28 +15,34 @@
 import { query } from "./db.js";
 import { fetchZillowEstimate } from "./services/valuation/zillow.js";
 import { fetchRedfinEstimate, buildRedfinSearchUrl } from "./services/valuation/redfin.js";
+import { fetchRentcastEstimate } from "./services/valuation/rentcast.js";
 import { calculateMarketValue } from "./services/valuation/market-value.js";
 import { scoreDeal, computeWarnings } from "./deals.js";
 
 const ZILLOW_CACHE_DAYS = 7;
 const UPSET_THRESHOLD   = 280_000;
 
+const RENTCAST_CACHE_DAYS = 7;
+
 /** Property row subset needed for valuation */
 interface PropRow {
-  sheriff_number:      string;
-  address:             string | null;
-  city:                string | null;
-  state:               string | null;
-  zip_code:            string | null;
-  upset_amount:        string | null;
-  priors_liens_taxes:  string | null;
-  occupancy_status:    string | null;
-  zillow_estimate:     string | null;
-  zillow_fetched_at:   Date | null;
-  zillow_status:       string | null;
-  redfin_estimate:     string | null;
-  redfin_fetched_at:   Date | null;
-  redfin_status:       string | null;
+  sheriff_number:       string;
+  address:              string | null;
+  city:                 string | null;
+  state:                string | null;
+  zip_code:             string | null;
+  upset_amount:         string | null;
+  priors_liens_taxes:   string | null;
+  occupancy_status:     string | null;
+  zillow_estimate:      string | null;
+  zillow_fetched_at:    Date | null;
+  zillow_status:        string | null;
+  redfin_estimate:      string | null;
+  redfin_fetched_at:    Date | null;
+  redfin_status:        string | null;
+  rentcast_estimate:    string | null;
+  rentcast_fetched_at:  Date | null;
+  rentcast_status:      string | null;
 }
 
 /**
@@ -189,7 +195,7 @@ export async function runBulkRedfinRefresh(force = false, noThreshold = false): 
                 zillow_estimate, zillow_fetched_at, zillow_status,
                 redfin_estimate, redfin_fetched_at, redfin_status
          FROM foreclosures
-         WHERE is_removed = FALSE
+         WHERE is_removed = FALSE AND permanently_excluded IS NOT TRUE
            AND address IS NOT NULL
            AND city IS NOT NULL
          ORDER BY upset_amount ASC NULLS LAST`
@@ -198,7 +204,7 @@ export async function runBulkRedfinRefresh(force = false, noThreshold = false): 
                 zillow_estimate, zillow_fetched_at, zillow_status,
                 redfin_estimate, redfin_fetched_at, redfin_status
          FROM foreclosures
-         WHERE is_removed = FALSE
+         WHERE is_removed = FALSE AND permanently_excluded IS NOT TRUE
            AND upset_amount IS NOT NULL
            AND upset_amount <= $1
            AND address IS NOT NULL
@@ -243,7 +249,7 @@ export async function runBulkZillowRefresh(force = false, noThreshold = false): 
                 zillow_estimate, zillow_fetched_at, zillow_status,
                 redfin_estimate, redfin_fetched_at, redfin_status
          FROM foreclosures
-         WHERE is_removed = FALSE
+         WHERE is_removed = FALSE AND permanently_excluded IS NOT TRUE
            AND address IS NOT NULL
            AND city IS NOT NULL
          ORDER BY upset_amount ASC NULLS LAST`
@@ -252,7 +258,7 @@ export async function runBulkZillowRefresh(force = false, noThreshold = false): 
                 zillow_estimate, zillow_fetched_at, zillow_status,
                 redfin_estimate, redfin_fetched_at, redfin_status
          FROM foreclosures
-         WHERE is_removed = FALSE
+         WHERE is_removed = FALSE AND permanently_excluded IS NOT TRUE
            AND upset_amount IS NOT NULL
            AND upset_amount <= $1
            AND address IS NOT NULL
@@ -283,8 +289,106 @@ export async function runBulkZillowRefresh(force = false, noThreshold = false): 
 }
 
 /**
+ * Fetch RentCast AVM estimate for a single property and recalculate deal.
+ * Respects 7-day cache unless force=true.
+ */
+export async function lookupRentcastValuation(
+  sheriffNumber: string,
+  address: string,
+  city: string,
+  state: string,
+  zip: string | null | undefined,
+  force = false,
+): Promise<"fetched" | "cached" | "skipped" | "error" | "rate_limited"> {
+  if (!process.env["RENTCAST_API_KEY"]) {
+    await query(
+      `UPDATE foreclosures SET rentcast_status='NOT_CONFIGURED', last_updated=NOW() WHERE sheriff_number=$1`,
+      [sheriffNumber],
+    );
+    return "skipped";
+  }
+
+  // Cache check
+  if (!force) {
+    const [row] = await query<{ rentcast_fetched_at: Date | null; rentcast_status: string | null }>(
+      `SELECT rentcast_fetched_at, rentcast_status FROM foreclosures WHERE sheriff_number=$1`,
+      [sheriffNumber],
+    );
+    if (row?.rentcast_status === "SUCCESS" && row.rentcast_fetched_at) {
+      const ageDays = (Date.now() - new Date(row.rentcast_fetched_at).getTime()) / 86_400_000;
+      if (ageDays < RENTCAST_CACHE_DAYS) return "cached";
+    }
+  }
+
+  try {
+    const result = await fetchRentcastEstimate(address, city, state, zip);
+
+    await query(
+      `UPDATE foreclosures SET
+         rentcast_estimate=$2, rentcast_fetched_at=$3, rentcast_status=$4,
+         last_updated=NOW()
+       WHERE sheriff_number=$1`,
+      [sheriffNumber, result.estimate, result.fetchedAt, result.status],
+    );
+
+    await recalculateDeal(sheriffNumber);
+    return result.status === "SUCCESS" ? "fetched" : "skipped";
+  } catch (err) {
+    console.error(`[valuation] lookupRentcastValuation error for ${sheriffNumber}:`, err);
+    await query(
+      `UPDATE foreclosures SET rentcast_status='ERROR', last_updated=NOW() WHERE sheriff_number=$1`,
+      [sheriffNumber],
+    );
+    return "error";
+  }
+}
+
+/**
+ * Bulk RentCast refresh — targets properties with no market value yet
+ * (Zillow and Redfin both missing/failed) or all properties if noThreshold=true.
+ */
+export async function runBulkRentcastRefresh(
+  force       = false,
+  noThreshold = false,
+): Promise<{ total: number; fetched: number; cached: number; skipped: number; errors: number }> {
+  // Target: properties where neither Zillow nor Redfin has a SUCCESS estimate
+  const rows = await query<PropRow>(
+    `SELECT sheriff_number, address, city, state, zip_code,
+            zillow_status, redfin_status, rentcast_status, rentcast_fetched_at
+     FROM foreclosures
+     WHERE is_removed = FALSE AND permanently_excluded IS NOT TRUE
+       AND address IS NOT NULL AND state IS NOT NULL
+       AND (
+         $1 OR (
+           COALESCE(zillow_status, '')  NOT IN ('SUCCESS')
+           AND COALESCE(redfin_status, '') NOT IN ('SUCCESS')
+         )
+       )
+     ORDER BY upset_amount ASC NULLS LAST`,
+    [noThreshold],
+  );
+
+  const stats = { total: rows.length, fetched: 0, cached: 0, skipped: 0, errors: 0 };
+
+  for (const prop of rows) {
+    // RentCast only needs address + state — city and zip are optional (it geocodes by street)
+    if (!prop.address || !prop.state) { stats.skipped++; continue; }
+    const outcome = await lookupRentcastValuation(
+      prop.sheriff_number, prop.address, prop.city ?? "", prop.state, prop.zip_code ?? null, force,
+    );
+    if (outcome === "fetched")  stats.fetched++;
+    else if (outcome === "cached")  stats.cached++;
+    else if (outcome === "error")   stats.errors++;
+    else                            stats.skipped++;
+    await sleep(500); // 500ms between calls — RentCast is more lenient than Zillow/Redfin
+  }
+
+  return stats;
+}
+
+/**
  * Recalculate market value, spread, discount, score, rating, and warnings
- * from the currently stored zillow_estimate + redfin_estimate.
+ * from the currently stored zillow_estimate + redfin_estimate + rentcast_estimate.
  * Call after any valuation change.
  */
 export async function recalculateDeal(sheriffNumber: string): Promise<void> {
@@ -292,18 +396,22 @@ export async function recalculateDeal(sheriffNumber: string): Promise<void> {
     `SELECT sheriff_number, address, city, state, zip_code, upset_amount,
             priors_liens_taxes, occupancy_status,
             zillow_estimate, zillow_fetched_at, zillow_status,
-            redfin_estimate, redfin_fetched_at, redfin_status
+            redfin_estimate, redfin_fetched_at, redfin_status,
+            rentcast_estimate, rentcast_fetched_at, rentcast_status
      FROM foreclosures WHERE sheriff_number=$1`,
     [sheriffNumber],
   );
   if (!rows.length) return;
   const prop = rows[0]!;
 
-  const upsetAmount    = prop.upset_amount     ? parseFloat(prop.upset_amount)    : null;
-  const zillowEstimate = prop.zillow_estimate  ? parseFloat(prop.zillow_estimate) : null;
-  const redfinEstimate = prop.redfin_estimate  ? parseFloat(prop.redfin_estimate) : null;
+  const upsetAmount      = prop.upset_amount      ? parseFloat(prop.upset_amount)      : null;
+  const zillowEstimate   = prop.zillow_estimate   ? parseFloat(prop.zillow_estimate)   : null;
+  const redfinEstimate   = prop.redfin_estimate   ? parseFloat(prop.redfin_estimate)   : null;
+  const rentcastEstimate = prop.rentcast_estimate ? parseFloat(prop.rentcast_estimate) : null;
 
-  const { marketValueUsed, marketValueSource } = calculateMarketValue(zillowEstimate, redfinEstimate);
+  const { marketValueUsed, marketValueSource } = calculateMarketValue(
+    zillowEstimate, redfinEstimate, rentcastEstimate,
+  );
   const metrics  = scoreDeal(upsetAmount, marketValueUsed, zillowEstimate, redfinEstimate);
   const warnings = computeWarnings({
     upsetAmount,
