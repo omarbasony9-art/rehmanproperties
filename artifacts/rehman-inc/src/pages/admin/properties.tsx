@@ -125,6 +125,36 @@ export default function AdminProperties() {
                 <label className="text-sm font-medium text-muted-foreground block mb-1.5">Description</label>
                 <Textarea rows={4} value={form.description ?? ""} onChange={e => setForm(f => ({ ...f, description: e.target.value || null }))} placeholder="Property details, highlights, condition..." />
               </div>
+              <div className="md:col-span-2">
+                <label className="text-sm font-medium text-muted-foreground block mb-1.5">Property Photo URL</label>
+                <Input
+                  value={form.imageKeys[0] ?? ""}
+                  onChange={e => {
+                    const url = e.target.value.trim();
+                    setForm(f => ({ ...f, imageKeys: url ? [url] : [] }));
+                  }}
+                  placeholder="https://example.com/photo.jpg"
+                />
+                {form.imageKeys[0] && (
+                  <div className="mt-2 relative w-full max-w-xs rounded-lg overflow-hidden border border-border bg-muted/30">
+                    <img
+                      src={form.imageKeys[0]}
+                      alt="Property preview"
+                      className="w-full h-36 object-cover"
+                      onError={e => { (e.currentTarget as HTMLImageElement).style.opacity = "0.3"; }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setForm(f => ({ ...f, imageKeys: [] }))}
+                      className="absolute top-1.5 right-1.5 bg-background/80 hover:bg-background rounded-md p-1 text-muted-foreground hover:text-foreground transition-colors"
+                      title="Remove photo"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
+                <p className="text-xs text-muted-foreground mt-1">Paste any public image URL. The photo will appear on the public properties page.</p>
+              </div>
               <div className="md:col-span-2 flex items-center gap-2">
                 <input type="checkbox" id="featured" checked={form.featured} onChange={e => setForm(f => ({ ...f, featured: e.target.checked }))} className="w-4 h-4" />
                 <label htmlFor="featured" className="text-sm font-medium">Featured property</label>

@@ -88,7 +88,7 @@ export default function PropertiesPage() {
                   <div className="h-44 bg-muted/40 flex items-center justify-center overflow-hidden">
                     {prop.imageKeys && prop.imageKeys.length > 0 ? (
                       <img
-                        src={`/api/photos/${prop.imageKeys[0]}`}
+                        src={prop.imageKeys[0].startsWith("http") ? prop.imageKeys[0] : `/api/photos/${prop.imageKeys[0]}`}
                         alt={prop.title}
                         className="w-full h-full object-cover"
                         onError={(e) => {
