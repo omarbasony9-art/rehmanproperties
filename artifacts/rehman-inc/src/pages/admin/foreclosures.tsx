@@ -23,10 +23,9 @@ import {
   ChevronUp, ChevronDown, ChevronsUpDown,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { adminFetch } from "@/lib/admin-api";
 import { normalizeArray } from "@/lib/normalize-array";
 
-const BASE = "/foreclosure-tracker/api";
+const BASE = "/api/foreclosures";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -36,9 +35,9 @@ interface Listing {
   courtCaseNumber: string | null;
   currentSaleDate: string | null;
   originalSaleDate: string | null;
-  plaintiffName: string | null;
-  defendantName: string | null;
-  streetAddress: string | null;
+  plaintiff: string | null;
+  defendant: string | null;
+  address: string | null;
   city: string | null;
   state: string | null;
   zipCode: string | null;
@@ -56,15 +55,12 @@ interface Listing {
   // Valuation — Zillow
   zillowEstimate: number | null;
   zillowStatus: string;
-  zillowFetchedAt: string | null;
   // Valuation — Redfin
   redfinEstimate: number | null;
   redfinStatus: string;
-  redfinFetchedAt: string | null;
   // Market value
-  marketValueUsed: number | null;
+  estimatedMarketValue: number | null;
   marketValueSource: string;
-  valuationUpdatedAt: string | null;
   // Deal
   estimatedSpread: number | null;
   discountPercent: number | null;
@@ -72,39 +68,37 @@ interface Listing {
   dealRating: string;
   dealScore: number | null;
   dealWarnings: string[];
-  warnings: string[];
   // Timestamps
   firstSeen: string | null;
-  lastSeen: string | null;
-  lastChanged: string | null;
+  lastUpdated: string | null;
   isNew: boolean;
 }
 
 interface ListResponse {
   total: number;
-  page: number;
-  limit: number;
-  items: Listing[];
+  rows: Listing[];
 }
 
-interface Health {
-  status: string;
-  lastRefresh: string | null;
-  listingCount: number;
-  majorDeals: number;
+interface Stats {
+  atlantic: number;
+  capeMay: number;
+  extreme: number;
+  major: number;
+  strong: number;
+  under280: number;
+  lastUpdated: string | null;
 }
 
 // ─── Tabs ─────────────────────────────────────────────────────────────────────
 
-type TabId = "all" | "under280k" | "extreme" | "major" | "strong" | "unknown";
+type TabId = "all" | "under280k" | "extreme" | "major" | "strong";
 
 const TABS: { id: TabId; label: string; params: Record<string, string> }[] = [
-  { id: "all",       label: "All Listings",       params: {} },
-  { id: "under280k", label: "Under $280K",         params: { maxUpset: "280000" } },
-  { id: "extreme",   label: "Extreme Deals",       params: { rating: "EXTREME" } },
-  { id: "major",     label: "Major Deals",         params: { rating: "MAJOR" } },
-  { id: "strong",    label: "Strong Deals",        params: { rating: "STRONG" } },
-  { id: "unknown",   label: "Unknown Valuation",   params: { unknownValuation: "true" } },
+  { id: "all",       label: "All Listings",  params: {} },
+  { id: "under280k", label: "Under $280K",   params: { upsetMax: "280000" } },
+  { id: "extreme",   label: "Extreme Deals", params: { deal: "EXTREME" } },
+  { id: "major",     label: "Major Deals",   params: { deal: "MAJOR" } },
+  { id: "strong",    label: "Strong Deals",  params: { deal: "STRONG" } },
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -182,9 +176,10 @@ function RedfinModal({
     if (isNaN(n) || n <= 0) { toast({ title: "Invalid amount", variant: "destructive" }); return; }
     setSaving(true);
     try {
-      const resp = await fetch(`${BASE}/foreclosures/${listing.sheriffNumber}/valuation/redfin`, {
+      const resp = await fetch(`${BASE}/listings/${listing.sheriffNumber}/redfin`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ estimate: n }),
       });
       if (!resp.ok) {
@@ -193,8 +188,8 @@ function RedfinModal({
         return;
       }
       toast({ title: "Redfin estimate saved", description: `$${n.toLocaleString()}` });
-      // Fetch updated property
-      const refreshed = await fetch(`${BASE}/foreclosures/${listing.sheriffNumber}`).then((r) => r.json()) as Listing;
+      const data = await resp.json() as { listing?: Listing };
+      const refreshed = data.listing ?? (await fetch(`${BASE}/listings/${listing.sheriffNumber}`, { credentials: "include" }).then((r) => r.json()) as Listing);
       onSaved(refreshed);
       onClose();
     } catch (err) {
@@ -257,8 +252,8 @@ function DetailSheet({
   recalcLoading: boolean;
 }) {
   if (!listing) return null;
-  const addr = [listing.streetAddress, listing.city, listing.state, listing.zipCode].filter(Boolean).join(", ");
-  const warnings = listing.dealWarnings ?? listing.warnings ?? [];
+  const addr = [listing.address, listing.city, listing.state, listing.zipCode].filter(Boolean).join(", ");
+  const warnings = listing.dealWarnings ?? [];
 
   return (
     <Sheet open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
@@ -309,7 +304,7 @@ function DetailSheet({
               <div className="col-span-2 bg-muted/50 rounded-md p-2">
                 <p className="text-xs text-muted-foreground">Market Value Used</p>
                 <p className="font-semibold text-base mt-0.5">
-                  {listing.marketValueUsed != null ? fmt$(listing.marketValueUsed) : <span className="text-muted-foreground italic">Not valued yet</span>}
+                  {listing.estimatedMarketValue != null ? fmt$(listing.estimatedMarketValue) : <span className="text-muted-foreground italic">Not valued yet</span>}
                 </p>
                 {listing.marketValueSource !== "NONE" && (
                   <p className="text-xs text-muted-foreground mt-0.5">{SOURCE_LABELS[listing.marketValueSource] ?? listing.marketValueSource}</p>
@@ -359,8 +354,8 @@ function DetailSheet({
           <div className="space-y-2 text-sm">
             {[
               ["Type",       TYPE_LABELS[listing.foreclosureType ?? ""] ?? listing.foreclosureType ?? "—"],
-              ["Plaintiff",  listing.plaintiffName],
-              ["Defendant",  listing.defendantName],
+              ["Plaintiff",  listing.plaintiff],
+              ["Defendant",  listing.defendant],
               ["Sale Date",  fmtDate(listing.currentSaleDate)],
               ["Court Case", listing.courtCaseNumber],
               ["Occupancy",  listing.occupancyStatus],
@@ -419,28 +414,36 @@ export default function AdminForeclosures() {
   const [zillowLoadingId, setZillowLoadingId]   = useState<string | null>(null);
   const [recalcLoadingId, setRecalcLoadingId]   = useState<string | null>(null);
 
-  const healthQ = useQuery<Health>({
-    queryKey: ["fc-health"],
-    queryFn: () => fetch(`${BASE}/health`).then((r) => r.json()),
+  const statsQ = useQuery<Stats>({
+    queryKey: ["fc-stats"],
+    queryFn: () => fetch(`${BASE}/stats`, { credentials: "include" }).then((r) => r.json()),
     refetchInterval: 60_000,
   });
 
   const activeTab = TABS.find((t) => t.id === tab) ?? TABS[0]!;
   const params = new URLSearchParams({
-    page: String(page), limit: String(LIMIT),
-    sortBy, sortDir,
+    limit: String(LIMIT),
+    sort: sortBy, order: sortDir,
+    offset: String((page - 1) * LIMIT),
     ...activeTab.params,
     ...(county !== "all" ? { county } : {}),
   });
 
   const listQ = useQuery<ListResponse>({
     queryKey: ["fc-listings", tab, page, sortBy, sortDir, county],
-    queryFn: () => fetch(`${BASE}/foreclosures?${params}`).then((r) => r.json()),
+    queryFn: () => fetch(`${BASE}/listings?${params}`, { credentials: "include" }).then((r) => r.json()),
   });
 
-  const listings   = normalizeArray<Listing>(listQ.data, ["items"]);
+  const listings   = normalizeArray<Listing>(listQ.data, ["rows"]);
   const totalPages = Math.ceil((listQ.data?.total ?? 0) / LIMIT);
-  const health     = healthQ.data;
+  const stats      = statsQ.data;
+  // Map stats to a health-like shape for the stat cards
+  const health = stats ? {
+    status: "ok",
+    lastRefresh: stats.lastUpdated,
+    listingCount: (stats.atlantic ?? 0) + (stats.capeMay ?? 0),
+    majorDeals: (stats.extreme ?? 0) + (stats.major ?? 0) + (stats.strong ?? 0),
+  } : undefined;
 
   const handleTabChange = (id: TabId) => { setTab(id); setPage(1); };
   const handleCountyChange = (c: string) => { setCounty(c); setPage(1); };
@@ -474,9 +477,14 @@ export default function AdminForeclosures() {
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
-      await adminFetch("/admin/foreclosure-refresh", { method: "POST" });
-      toast({ title: "Refresh started", description: "CivilView scrape running in background." });
-      setTimeout(() => { healthQ.refetch(); listQ.refetch(); }, 8000);
+      // Fire both county syncs; await both so the button stays disabled until done
+      await Promise.allSettled([
+        fetch(`${BASE}/sync/atlantic`, { method: "POST", credentials: "include" }),
+        fetch(`${BASE}/sync/cape-may`, { method: "POST", credentials: "include" }),
+      ]);
+      toast({ title: "Sync complete", description: "CivilView data refreshed." });
+      statsQ.refetch();
+      listQ.refetch();
     } catch (err) {
       toast({ title: "Refresh failed", description: err instanceof Error ? err.message : "Unknown error", variant: "destructive" });
     } finally {
@@ -486,26 +494,25 @@ export default function AdminForeclosures() {
 
   const refreshListing = async (sheriffNumber: string): Promise<Listing | null> => {
     try {
-      return await fetch(`${BASE}/foreclosures/${sheriffNumber}`).then((r) => r.json()) as Listing;
+      return await fetch(`${BASE}/listings/${sheriffNumber}`, { credentials: "include" }).then((r) => r.json()) as Listing;
     } catch { return null; }
   };
 
   const handleZillowRefresh = async (listing: Listing) => {
     setZillowLoadingId(listing.sheriffNumber);
     try {
-      const resp = await fetch(`${BASE}/foreclosures/${listing.sheriffNumber}/valuation`, { method: "POST" });
-      const data = await resp.json() as { outcome?: string; zillow_status?: string; error?: string };
+      const resp = await fetch(`${BASE}/listings/${listing.sheriffNumber}/valuate`, { method: "POST", credentials: "include" });
+      const data = await resp.json() as { outcome?: string; listing?: Listing; error?: string };
       if (!resp.ok) {
-        toast({ title: "Zillow error", description: data.error ?? "Unknown error", variant: "destructive" });
+        toast({ title: "Valuation error", description: data.error ?? "Unknown error", variant: "destructive" });
         return;
       }
-      const outcome = data.outcome ?? data.zillow_status ?? "done";
-      toast({ title: "Zillow refresh complete", description: `Status: ${outcome}` });
+      toast({ title: "Valuation complete", description: `Status: ${data.outcome ?? "done"}` });
       await queryClient.invalidateQueries({ queryKey: ["fc-listings"] });
-      const updated = await refreshListing(listing.sheriffNumber);
-      if (updated) setSelected(updated);
+      if (data.listing) setSelected(data.listing);
+      else { const updated = await refreshListing(listing.sheriffNumber); if (updated) setSelected(updated); }
     } catch (err) {
-      toast({ title: "Zillow error", description: err instanceof Error ? err.message : "Unknown", variant: "destructive" });
+      toast({ title: "Valuation error", description: err instanceof Error ? err.message : "Unknown", variant: "destructive" });
     } finally {
       setZillowLoadingId(null);
     }
@@ -514,14 +521,15 @@ export default function AdminForeclosures() {
   const handleRecalculate = async (listing: Listing) => {
     setRecalcLoadingId(listing.sheriffNumber);
     try {
-      const resp = await fetch(`${BASE}/foreclosures/${listing.sheriffNumber}/recalculate`, { method: "POST" });
+      const resp = await fetch(`${BASE}/listings/${listing.sheriffNumber}/recalculate`, { method: "POST", credentials: "include" });
+      const data = await resp.json() as { listing?: Listing; error?: string };
       if (!resp.ok) {
-        toast({ title: "Recalculate failed", variant: "destructive" }); return;
+        toast({ title: "Recalculate failed", description: data.error, variant: "destructive" }); return;
       }
       toast({ title: "Deal recalculated" });
       await queryClient.invalidateQueries({ queryKey: ["fc-listings"] });
-      const updated = await refreshListing(listing.sheriffNumber);
-      if (updated) setSelected(updated);
+      if (data.listing) setSelected(data.listing);
+      else { const updated = await refreshListing(listing.sheriffNumber); if (updated) setSelected(updated); }
     } catch (err) {
       toast({ title: "Error", description: err instanceof Error ? err.message : "Unknown", variant: "destructive" });
     } finally {
@@ -646,8 +654,8 @@ export default function AdminForeclosures() {
                 </thead>
                 <tbody className="divide-y">
                   {listings.map((item) => {
-                    const addr = [item.streetAddress, item.city].filter(Boolean).join(", ");
-                    const w = item.dealWarnings ?? item.warnings ?? [];
+                    const addr = [item.address, item.city].filter(Boolean).join(", ");
+                    const w = item.dealWarnings ?? [];
                     return (
                       <tr key={item.sheriffNumber} onClick={() => setSelected(item)}
                         className="hover:bg-muted/40 cursor-pointer transition-colors">
@@ -669,8 +677,8 @@ export default function AdminForeclosures() {
                         </td>
                         {/* Market value — visually distinct */}
                         <td className="px-3 py-2.5 tabular-nums whitespace-nowrap">
-                          {item.marketValueUsed != null
-                            ? <span className="font-semibold text-foreground">{fmt$(item.marketValueUsed)}</span>
+                          {item.estimatedMarketValue != null
+                            ? <span className="font-semibold text-foreground">{fmt$(item.estimatedMarketValue)}</span>
                             : <span className="text-muted-foreground/60 italic text-xs">Not valued</span>}
                         </td>
                         <td className="px-3 py-2.5 tabular-nums whitespace-nowrap">

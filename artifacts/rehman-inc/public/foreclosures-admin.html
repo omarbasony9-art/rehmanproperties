@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Foreclosure Tracker — Admin</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: system-ui, sans-serif; font-size: 14px; background: #f4f5f7; color: #1a1a2e; }
+  a { color: #2563eb; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  header {
+    background: #1a1a2e; color: #fff; padding: 12px 20px;
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  }
+  header h1 { font-size: 18px; font-weight: 700; flex: 1; white-space: nowrap; }
+  .header-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .county-select {
+    padding: 6px 10px; border-radius: 6px; border: 1px solid #374151;
+    background: #253047; color: #fff; font-size: 13px; cursor: pointer;
+  }
+  .county-select option { background: #1a1a2e; }
+  .sync-btn {
+    background: #2563eb; color: #fff; border: none; padding: 8px 16px;
+    border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600;
+    white-space: nowrap;
+  }
+  .sync-btn:hover { background: #1d4ed8; }
+  .sync-btn:disabled { background: #6b7280; cursor: not-allowed; }
+  .admin-link { color: #93c5fd; font-size: 13px; white-space: nowrap; }
+
+  .stats-bar {
+    display: flex; flex-wrap: wrap; gap: 12px; padding: 16px 20px;
+    background: #fff; border-bottom: 1px solid #e5e7eb;
+  }
+  .stat-card {
+    background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px;
+    padding: 10px 16px; min-width: 110px; text-align: center;
+  }
+  .stat-card .label { font-size: 11px; text-transform: uppercase; color: #6b7280; letter-spacing: 0.05em; }
+  .stat-card .value { font-size: 22px; font-weight: 700; color: #1a1a2e; margin-top: 2px; }
+  .stat-card.extreme .value { color: #dc2626; }
+  .stat-card.major .value { color: #d97706; }
+  .stat-card.strong .value { color: #059669; }
+
+  .controls {
+    padding: 12px 20px; background: #fff; border-bottom: 1px solid #e5e7eb;
+    display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+  }
+  .filter-btn {
+    padding: 5px 12px; border-radius: 20px; border: 1px solid #d1d5db;
+    background: #fff; cursor: pointer; font-size: 13px; font-weight: 500;
+    transition: all 0.1s;
+  }
+  .filter-btn:hover { border-color: #2563eb; color: #2563eb; }
+  .filter-btn.active { background: #2563eb; color: #fff; border-color: #2563eb; }
+  .filter-label { font-size: 12px; color: #6b7280; margin-right: 4px; }
+  .search-input {
+    padding: 5px 10px; border: 1px solid #d1d5db; border-radius: 6px;
+    font-size: 13px; min-width: 200px; margin-left: auto;
+  }
+
+  .status-bar {
+    padding: 6px 20px; font-size: 12px; color: #6b7280;
+    background: #f9fafb; border-bottom: 1px solid #e5e7eb;
+  }
+  .status-bar span { margin-right: 16px; }
+
+  .table-wrap { overflow-x: auto; padding: 0 0 40px; }
+  table { width: 100%; border-collapse: collapse; background: #fff; font-size: 13px; }
+  thead th {
+    background: #f9fafb; text-align: left; padding: 10px 12px;
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;
+    color: #6b7280; border-bottom: 1px solid #e5e7eb; white-space: nowrap;
+    cursor: pointer; user-select: none;
+  }
+  thead th:hover { background: #f0f4ff; color: #2563eb; }
+  tbody tr { border-bottom: 1px solid #f0f0f0; }
+  tbody tr:hover { background: #f8faff; cursor: pointer; }
+  tbody td { padding: 9px 12px; vertical-align: middle; }
+  .badge {
+    display: inline-block; padding: 2px 8px; border-radius: 12px;
+    font-size: 11px; font-weight: 700; letter-spacing: 0.05em;
+  }
+  .badge-EXTREME { background: #fee2e2; color: #dc2626; }
+  .badge-MAJOR   { background: #fef3c7; color: #d97706; }
+  .badge-STRONG  { background: #d1fae5; color: #059669; }
+  .badge-NORMAL  { background: #f3f4f6; color: #6b7280; }
+  .badge-UNKNOWN { background: #f3f4f6; color: #9ca3af; }
+
+  .badge-mortgage      { background: #dbeafe; color: #1d4ed8; }
+  .badge-tax           { background: #fce7f3; color: #be185d; }
+  .badge-lien          { background: #ede9fe; color: #7c3aed; }
+  .badge-unknown-type  { background: #f3f4f6; color: #6b7280; }
+
+  .warnings { display: flex; gap: 4px; flex-wrap: wrap; }
+  .warn-chip {
+    font-size: 10px; padding: 1px 6px; border-radius: 10px;
+    background: #fff3cd; color: #856404; border: 1px solid #ffc107;
+  }
+
+  .score-bar {
+    display: inline-block; width: 60px; height: 8px; border-radius: 4px;
+    background: #e5e7eb; position: relative; vertical-align: middle; margin-right: 4px;
+  }
+  .score-fill { height: 100%; border-radius: 4px; background: #2563eb; transition: width 0.3s; }
+
+  .county-badge-atlantic { font-size: 10px; background: #dbeafe; color: #1d4ed8; padding: 1px 5px; border-radius: 8px; }
+  .county-badge-cape-may { font-size: 10px; background: #d1fae5; color: #065f46; padding: 1px 5px; border-radius: 8px; }
+
+  /* Modal */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+    z-index: 100; align-items: flex-start; justify-content: center;
+    padding: 40px 20px; overflow-y: auto;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: #fff; border-radius: 12px; width: 100%; max-width: 720px;
+    padding: 24px; position: relative;
+  }
+  .modal-close {
+    position: absolute; top: 16px; right: 16px; font-size: 20px;
+    border: none; background: none; cursor: pointer; color: #6b7280;
+  }
+  .modal-close:hover { color: #1a1a2e; }
+  .modal h2 { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
+  .modal .subtitle { font-size: 13px; color: #6b7280; margin-bottom: 16px; }
+  .detail-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px;
+  }
+  .detail-item { background: #f9fafb; border-radius: 6px; padding: 10px 12px; }
+  .detail-item .dl { font-size: 11px; text-transform: uppercase; color: #6b7280; margin-bottom: 2px; }
+  .detail-item .dv { font-weight: 600; word-break: break-word; }
+  .detail-section { margin-top: 16px; }
+  .detail-section h3 { font-size: 13px; font-weight: 700; margin-bottom: 8px; color: #374151; text-transform: uppercase; letter-spacing: 0.05em; }
+  .history-entry { padding: 6px 0; border-bottom: 1px solid #f0f0f0; font-size: 13px; }
+  .history-entry .hdate { font-weight: 600; min-width: 100px; display: inline-block; }
+  .modal-links { display: flex; gap: 12px; margin-top: 16px; flex-wrap: wrap; }
+  .modal-link { padding: 6px 14px; border-radius: 6px; border: 1px solid #d1d5db; font-size: 13px; font-weight: 500; }
+  .modal-link:hover { background: #f9fafb; text-decoration: none; }
+
+  .empty { text-align: center; padding: 60px 20px; color: #9ca3af; }
+  .loading { text-align: center; padding: 60px 20px; color: #6b7280; }
+
+  .sync-panel {
+    background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px;
+    padding: 10px 16px; margin: 12px 20px; font-size: 13px; display: none;
+  }
+  .sync-panel.visible { display: block; }
+  .sync-progress { color: #1d4ed8; font-weight: 500; }
+  .sync-success { color: #059669; font-weight: 500; }
+  .sync-error { color: #dc2626; font-weight: 500; }
+
+  .toast {
+    position: fixed; bottom: 24px; right: 24px; background: #1a1a2e; color: #fff;
+    padding: 12px 20px; border-radius: 8px; font-size: 13px; z-index: 200;
+    opacity: 0; transition: opacity 0.3s; pointer-events: none;
+  }
+  .toast.show { opacity: 1; pointer-events: auto; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🏠 Foreclosure Tracker</h1>
+  <div class="header-right">
+    <select class="county-select" id="countySelect" onchange="onCountyChange()">
+      <option value="">All Counties</option>
+      <option value="Atlantic">Atlantic</option>
+      <option value="Cape May">Cape May</option>
+    </select>
+    <button class="sync-btn" id="syncBtn" onclick="triggerSync()">↻ Sync Data</button>
+    <a class="admin-link" href="/admin">← Admin Panel</a>
+  </div>
+</header>
+
+<div class="sync-panel" id="syncPanel">
+  <span id="syncMsg" class="sync-progress">Syncing…</span>
+</div>
+
+<div class="stats-bar" id="statsBar">
+  <div class="stat-card"><div class="label">Atlantic</div><div class="value" id="statAtlantic">—</div></div>
+  <div class="stat-card"><div class="label">Cape May</div><div class="value" id="statCapeMay">—</div></div>
+  <div class="stat-card"><div class="label">Under $280K</div><div class="value" id="statUnder280">—</div></div>
+  <div class="stat-card extreme"><div class="label">Extreme</div><div class="value" id="statExtreme">—</div></div>
+  <div class="stat-card major"><div class="label">Major</div><div class="value" id="statMajor">—</div></div>
+  <div class="stat-card strong"><div class="label">Strong</div><div class="value" id="statStrong">—</div></div>
+  <div class="stat-card"><div class="label">Last Sync</div><div class="value" id="statRefresh" style="font-size:12px;margin-top:6px">—</div></div>
+</div>
+
+<div class="controls">
+  <span class="filter-label">Rating:</span>
+  <button class="filter-btn active" data-filter="rating" data-value="" onclick="setFilter('rating','',this)">All</button>
+  <button class="filter-btn" data-filter="rating" data-value="EXTREME" onclick="setFilter('rating','EXTREME',this)">Extreme</button>
+  <button class="filter-btn" data-filter="rating" data-value="MAJOR" onclick="setFilter('rating','MAJOR',this)">Major</button>
+  <button class="filter-btn" data-filter="rating" data-value="STRONG" onclick="setFilter('rating','STRONG',this)">Strong</button>
+  <span class="filter-label" style="margin-left:8px">Type:</span>
+  <button class="filter-btn active" data-filter="type" data-value="" onclick="setFilter('type','',this)">All</button>
+  <button class="filter-btn" data-filter="type" data-value="mortgage_foreclosure" onclick="setFilter('type','mortgage_foreclosure',this)">Mortgage</button>
+  <button class="filter-btn" data-filter="type" data-value="tax_foreclosure" onclick="setFilter('type','tax_foreclosure',this)">Tax</button>
+  <button class="filter-btn" data-filter="type" data-value="lien_foreclosure" onclick="setFilter('type','lien_foreclosure',this)">Lien</button>
+  <span class="filter-label" style="margin-left:8px">Amount:</span>
+  <button class="filter-btn" data-filter="upset" data-value="280000" onclick="setFilter('upset','280000',this)">Under $280K</button>
+  <input class="search-input" type="search" placeholder="Search plaintiff, defendant, address…" id="searchInput" oninput="debounceSearch()" />
+</div>
+
+<div class="status-bar">
+  <span id="statusCount">Loading…</span>
+  <span id="statusSort">Sorted by: Deal Score ↓</span>
+</div>
+
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th onclick="sortBy('deal_score')">Score ▾</th>
+        <th onclick="sortBy('deal_rating')">Rating</th>
+        <th onclick="sortBy('sheriff_number')">Sheriff #</th>
+        <th onclick="sortBy('current_sale_date')">Sale Date</th>
+        <th>County</th>
+        <th>Address</th>
+        <th onclick="sortBy('foreclosure_type')">Type</th>
+        <th onclick="sortBy('upset_amount')">Upset Amt</th>
+        <th onclick="sortBy('market_value_used')">Est. Value</th>
+        <th onclick="sortBy('estimated_spread')">Spread</th>
+        <th onclick="sortBy('discount_percent')">Discount</th>
+        <th>Warnings</th>
+      </tr>
+    </thead>
+    <tbody id="tbody"></tbody>
+  </table>
+  <div id="emptyState" class="empty" style="display:none">No listings match the current filters.</div>
+  <div id="loadingState" class="loading">Loading listings…</div>
+</div>
+
+<div class="modal-overlay" id="modal" onclick="if(event.target===this)closeModal()">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal()">✕</button>
+    <div id="modalContent"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── State ────────────────────────────────────────────────────────────────────
+let allData = [];
+let filters = { rating: '', type: '', upset: '', county: '' };
+let currentSort = 'deal_score';
+let currentOrder = 'desc';
+let searchQuery = '';
+let searchTimer = null;
+let isLoading = false;
+
+// ── Init ─────────────────────────────────────────────────────────────────────
+async function init() {
+  await Promise.all([loadStats(), loadListings()]);
+}
+
+// ── Data loading ─────────────────────────────────────────────────────────────
+async function loadStats() {
+  try {
+    const res = await fetch('/api/foreclosures/stats', { credentials: 'include' });
+    if (!res.ok) return;
+    const s = await res.json();
+    document.getElementById('statAtlantic').textContent = s.atlantic ?? 0;
+    document.getElementById('statCapeMay').textContent = s.capeMay ?? 0;
+    document.getElementById('statUnder280').textContent = s.under280 ?? 0;
+    document.getElementById('statExtreme').textContent = s.extreme ?? 0;
+    document.getElementById('statMajor').textContent = s.major ?? 0;
+    document.getElementById('statStrong').textContent = s.strong ?? 0;
+    if (s.lastUpdated) {
+      document.getElementById('statRefresh').textContent = fmtRelDate(s.lastUpdated);
+    }
+  } catch (e) {
+    console.error('Stats load error:', e);
+  }
+}
+
+async function loadListings() {
+  if (isLoading) return;
+  isLoading = true;
+  document.getElementById('loadingState').style.display = 'block';
+  document.getElementById('emptyState').style.display = 'none';
+  document.getElementById('tbody').innerHTML = '';
+
+  const params = new URLSearchParams();
+  params.set('sort', currentSort);
+  params.set('order', currentOrder);
+  params.set('limit', '500');
+  if (filters.county) params.set('county', filters.county);
+  if (filters.rating) params.set('deal', filters.rating);
+  if (filters.type) params.set('type', filters.type);
+  if (filters.upset) params.set('upsetMax', filters.upset);
+  if (searchQuery) params.set('search', searchQuery);
+
+  try {
+    const res = await fetch('/api/foreclosures/listings?' + params.toString(), { credentials: 'include' });
+    if (!res.ok) {
+      showError('Failed to load listings: ' + res.status);
+      return;
+    }
+    const data = await res.json();
+    allData = data.rows || [];
+    render(allData);
+    document.getElementById('statusCount').textContent =
+      `${allData.length} listing${allData.length !== 1 ? 's' : ''} (of ${data.total} total)`;
+  } catch (e) {
+    showError('Network error loading listings.');
+    console.error(e);
+  } finally {
+    isLoading = false;
+    document.getElementById('loadingState').style.display = 'none';
+  }
+}
+
+// ── Render ───────────────────────────────────────────────────────────────────
+function render(data) {
+  const tbody = document.getElementById('tbody');
+  if (!data.length) {
+    tbody.innerHTML = '';
+    document.getElementById('emptyState').style.display = 'block';
+    return;
+  }
+  document.getElementById('emptyState').style.display = 'none';
+  tbody.innerHTML = data.map((x, i) => `
+    <tr onclick="openModal(${i})">
+      <td>${scoreCell(x)}</td>
+      <td><span class="badge badge-${escHtml(x.dealRating)}">${escHtml(x.dealRating)}</span></td>
+      <td><strong>${escHtml(x.sheriffNumber)}</strong>${x.isNew ? ' <span style="font-size:10px;background:#fef9c3;color:#92400e;padding:1px 5px;border-radius:8px">NEW</span>' : ''}</td>
+      <td>${escHtml(x.currentSaleDate || '—')}</td>
+      <td><span class="${countyClass(x.county)}">${escHtml(x.county)}</span></td>
+      <td>${escHtml(x.address || '')}${x.city ? '<br/><span style="color:#6b7280;font-size:12px">' + escHtml(x.city) + '</span>' : ''}</td>
+      <td><span class="badge ${typeClass(x.foreclosureType)}">${fmtType(x.foreclosureType)}</span></td>
+      <td>${fmtMoney(x.upsetAmount)}</td>
+      <td>${fmtMoney(x.estimatedMarketValue)}</td>
+      <td>${fmtMoney(x.estimatedSpread)}</td>
+      <td>${x.discountPercent != null ? escHtml(x.discountPercent.toFixed(1)) + '%' : '—'}</td>
+      <td>${warningChips(x.dealWarnings)}</td>
+    </tr>`).join('');
+}
+
+function scoreCell(x) {
+  if (x.dealScore == null) return '<span style="color:#9ca3af">—</span>';
+  const pct = Math.min(100, x.dealScore);
+  return `<span class="score-bar"><span class="score-fill" style="width:${pct}%"></span></span>${Number(x.dealScore)}`;
+}
+
+function warningChips(warns) {
+  if (!warns || !warns.length) return '<span style="color:#9ca3af;font-size:11px">—</span>';
+  const display = warns.slice(0, 3).map(w =>
+    `<span class="warn-chip" title="${escHtml(String(w))}">${escHtml(String(w).replace(/_/g,' '))}</span>`).join('');
+  const more = warns.length > 3 ? `<span class="warn-chip">+${warns.length-3}</span>` : '';
+  return `<div class="warnings">${display}${more}</div>`;
+}
+
+/**
+ * Validate that a URL is safe to use in href (http/https only).
+ * Returns null for javascript:, data:, and anything unexpected.
+ */
+function safeUrl(url) {
+  if (!url || typeof url !== 'string') return null;
+  try {
+    const u = new URL(url);
+    return (u.protocol === 'http:' || u.protocol === 'https:') ? url : null;
+  } catch { return null; }
+}
+
+// ── Modal ─────────────────────────────────────────────────────────────────────
+function openModal(i) {
+  const x = allData[i];
+  if (!x) return;
+
+  // field() — always escapes externally-sourced text values
+  const field = (label, val) => {
+    const safe = (val != null && String(val).trim())
+      ? escHtml(String(val))
+      : '<span style="color:#9ca3af">—</span>';
+    return `<div class="detail-item"><div class="dl">${escHtml(label)}</div><div class="dv">${safe}</div></div>`;
+  };
+
+  // fieldHtml() — value is trusted HTML produced by this code (badges, formatted numbers)
+  const fieldHtml = (label, html) =>
+    `<div class="detail-item"><div class="dl">${escHtml(label)}</div><div class="dv">${html || '<span style="color:#9ca3af">—</span>'}</div></div>`;
+
+  const address = [x.address, x.city, x.state, x.zipCode].filter(Boolean).map(escHtml).join(', ');
+
+  let historyHtml = '';
+  if (x.statusHistory && x.statusHistory.length) {
+    historyHtml = `
+      <div class="detail-section">
+        <h3>Status History</h3>
+        ${x.statusHistory.map(e => `
+          <div class="history-entry">
+            <span class="hdate">${escHtml(String(e.eventDate || '—'))}</span>
+            ${escHtml(String(e.eventDescription || ''))}
+          </div>`).join('')}
+      </div>`;
+  }
+
+  const warningsHtml = x.dealWarnings && x.dealWarnings.length
+    ? `<div class="detail-section"><h3>Warnings</h3><div class="warnings">${
+        x.dealWarnings.map(w =>
+          `<span class="warn-chip">${escHtml(String(w).replace(/_/g,' '))}</span>`).join('')
+      }</div></div>`
+    : '';
+
+  const links = [];
+  const safe = safeUrl;
+  if (safe(x.googleMapsUrl))   links.push(`<a class="modal-link" href="${escHtml(x.googleMapsUrl)}" target="_blank" rel="noopener">📍 Google Maps</a>`);
+  if (safe(x.zillowUrl))       links.push(`<a class="modal-link" href="${escHtml(x.zillowUrl)}" target="_blank" rel="noopener">🏠 Zillow Search</a>`);
+  if (safe(x.zillowPropertyUrl)) links.push(`<a class="modal-link" href="${escHtml(x.zillowPropertyUrl)}" target="_blank" rel="noopener">📊 Zillow Listing</a>`);
+  if (safe(x.redfinPropertyUrl)) links.push(`<a class="modal-link" href="${escHtml(x.redfinPropertyUrl)}" target="_blank" rel="noopener">🔴 Redfin</a>`);
+  if (safe(x.detailUrl))       links.push(`<a class="modal-link" href="${escHtml(x.detailUrl)}" target="_blank" rel="noopener">🔗 CivilView</a>`);
+
+  document.getElementById('modalContent').innerHTML = `
+    <h2>${escHtml(x.sheriffNumber)}</h2>
+    <p class="subtitle">${address} &bull; ${escHtml(x.county)} County &bull; <span class="badge badge-${escHtml(x.dealRating)}">${escHtml(x.dealRating)}</span></p>
+    <div class="detail-grid">
+      ${field('Sale Date', x.currentSaleDate)}
+      ${field('Original Date', x.originalSaleDate)}
+      ${field('Plaintiff', x.plaintiff)}
+      ${field('Defendant', x.defendant)}
+      ${field('Attorney', x.attorney)}
+      ${fieldHtml('Type', `<span class="badge ${typeClass(x.foreclosureType)}">${fmtType(x.foreclosureType)}</span>`)}
+      ${field('Upset Amount', x.upsetAmount != null ? fmtMoney(x.upsetAmount) : null)}
+      ${field('Est. Market Value', x.estimatedMarketValue != null ? fmtMoney(x.estimatedMarketValue) : null)}
+      ${field('Estimated Spread', x.estimatedSpread != null ? fmtMoney(x.estimatedSpread) : null)}
+      ${field('Discount', x.discountPercent != null ? x.discountPercent.toFixed(1) + '%' : null)}
+      ${field('Deal Score', x.dealScore != null ? x.dealScore + ' / 100' : null)}
+      ${field('Approx. Judgment', x.approxJudgment != null ? fmtMoney(x.approxJudgment) : null)}
+      ${field('Priors / Liens', x.priorsLiensTaxes)}
+      ${field('Block', x.block)}
+      ${field('Tax Lot', x.taxLot)}
+      ${field('Nearest Cross St.', x.nearestCrossStreet)}
+      ${field('Occupancy', x.occupancyStatus)}
+      ${fieldHtml('Zillow Estimate', x.zillowEstimate != null
+        ? `${escHtml(fmtMoney(x.zillowEstimate))} <small style="color:#6b7280">(${escHtml(String(x.zillowStatus))})</small>`
+        : escHtml(String(x.zillowStatus || '—')))}
+      ${fieldHtml('Redfin Estimate', x.redfinEstimate != null
+        ? `${escHtml(fmtMoney(x.redfinEstimate))} <small style="color:#6b7280">(${escHtml(String(x.redfinStatus))})</small>`
+        : escHtml(String(x.redfinStatus || '—')))}
+      ${field('Court Case #', x.courtCaseNumber)}
+      ${field('First Seen', x.firstSeen ? x.firstSeen.slice(0,10) : null)}
+      ${field('Last Updated', x.lastUpdated ? x.lastUpdated.slice(0,10) : null)}
+    </div>
+    ${x.propertyNotes ? `<div class="detail-section"><h3>Notes</h3><p style="font-size:13px">${escHtml(x.propertyNotes)}</p></div>` : ''}
+    ${warningsHtml}
+    ${historyHtml}
+    ${links.length ? `<div class="modal-links">${links.join('')}</div>` : ''}
+  `;
+  document.getElementById('modal').classList.add('open');
+}
+
+function closeModal() {
+  document.getElementById('modal').classList.remove('open');
+}
+
+// ── Sync ──────────────────────────────────────────────────────────────────────
+async function triggerSync() {
+  const countySelect = document.getElementById('countySelect').value;
+  const countySlugs = countySelect === 'Atlantic' ? ['atlantic']
+    : countySelect === 'Cape May' ? ['cape-may']
+    : ['atlantic', 'cape-may'];
+
+  const btn = document.getElementById('syncBtn');
+  const panel = document.getElementById('syncPanel');
+  const msg = document.getElementById('syncMsg');
+
+  btn.disabled = true;
+  panel.classList.add('visible');
+
+  const results = [];
+  for (const slug of countySlugs) {
+    const label = slug === 'atlantic' ? 'Atlantic' : 'Cape May';
+    msg.className = 'sync-progress';
+    msg.textContent = `Syncing ${label} County… (this may take 1–2 minutes)`;
+
+    try {
+      const res = await fetch(`/api/foreclosures/sync/${slug}`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      if (res.status === 401) {
+        msg.className = 'sync-error';
+        msg.textContent = 'Not logged in. Please sign in to the admin panel first.';
+        btn.disabled = false;
+        return;
+      }
+      const data = await res.json();
+      if (!res.ok) {
+        results.push(`${label}: Error — ${data.error || res.status}`);
+      } else {
+        results.push(`${label}: ${data.upserted} upserted, ${data.valuated} valued, ${data.errors} errors (${Math.round(data.durationMs/1000)}s)`);
+      }
+    } catch (e) {
+      results.push(`${label}: Network error`);
+    }
+  }
+
+  msg.className = 'sync-success';
+  msg.textContent = '✓ Sync complete — ' + results.join(' | ');
+  btn.disabled = false;
+
+  // Refresh data
+  await Promise.all([loadStats(), loadListings()]);
+  showToast('Sync complete!');
+}
+
+// ── Filters & sort ────────────────────────────────────────────────────────────
+function onCountyChange() {
+  const val = document.getElementById('countySelect').value;
+  filters.county = val;
+  loadListings();
+}
+
+function setFilter(type, value, btn) {
+  filters[type] = value;
+  document.querySelectorAll(`[data-filter="${type}"]`).forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  loadListings();
+}
+
+function sortBy(col) {
+  if (currentSort === col) {
+    currentOrder = currentOrder === 'desc' ? 'asc' : 'desc';
+  } else {
+    currentSort = col;
+    currentOrder = 'desc';
+  }
+  const arrow = currentOrder === 'desc' ? '↓' : '↑';
+  document.getElementById('statusSort').textContent = `Sorted by: ${col.replace(/_/g,' ')} ${arrow}`;
+  loadListings();
+}
+
+function debounceSearch() {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => {
+    searchQuery = document.getElementById('searchInput').value.trim();
+    loadListings();
+  }, 350);
+}
+
+// ── Format helpers ────────────────────────────────────────────────────────────
+function fmtMoney(n) {
+  if (n == null) return '—';
+  return '$' + Math.round(n).toLocaleString();
+}
+function fmtRelDate(iso) {
+  if (!iso) return '—';
+  try {
+    const d = new Date(iso);
+    const diff = Date.now() - d.getTime();
+    const h = Math.floor(diff / 3600000);
+    if (h < 1) return 'Just now';
+    if (h < 24) return `${h}h ago`;
+    const days = Math.floor(h / 24);
+    if (days < 30) return `${days}d ago`;
+    return d.toLocaleDateString();
+  } catch { return iso.slice(0,10); }
+}
+function fmtType(t) {
+  const m = { mortgage_foreclosure:'Mortgage', tax_foreclosure:'Tax', lien_foreclosure:'Lien' };
+  return m[t] || t || 'Unknown';
+}
+function typeClass(t) {
+  const m = { mortgage_foreclosure:'badge-mortgage', tax_foreclosure:'badge-tax', lien_foreclosure:'badge-lien' };
+  return m[t] || 'badge-unknown-type';
+}
+function countyClass(county) {
+  if (!county) return '';
+  return county.toLowerCase().includes('cape') ? 'county-badge-cape-may' : 'county-badge-atlantic';
+}
+function escHtml(s) {
+  if (s == null) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function showError(msg) {
+  document.getElementById('loadingState').textContent = '⚠️ ' + msg;
+  document.getElementById('loadingState').style.color = '#dc2626';
+  document.getElementById('loadingState').style.display = 'block';
+}
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 4000);
+}
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+init();
+</script>
+</body>
+</html>

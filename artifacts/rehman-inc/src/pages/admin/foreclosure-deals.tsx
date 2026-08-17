@@ -12,25 +12,24 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { adminFetch } from "@/lib/admin-api";
 import { normalizeArray } from "@/lib/normalize-array";
 
-const BASE = "/foreclosure-tracker/api";
+const BASE = "/api/foreclosures";
 
-// Matches the shape returned by formatDeal() in deals.ts
+// Matches the ListingRow shape returned by the Cloudflare foreclosure API
 interface Deal {
   sheriffNumber: string;
+  county: string;
   courtCaseNumber: string | null;
   currentSaleDate: string | null;
-  plaintiffName: string | null;
-  defendantName: string | null;
-  streetAddress: string | null;
+  plaintiff: string | null;
+  defendant: string | null;
+  address: string | null;
   city: string | null;
   state: string | null;
   zipCode: string | null;
   upsetAmount: number | null;
-  approxJudgment: number | null;
-  marketValueUsed: number | null;
+  estimatedMarketValue: number | null;
   marketValueSource: string | null;
   foreclosureType: string | null;
   dealRating: string;
@@ -38,23 +37,19 @@ interface Deal {
   estimatedSpread: number | null;
   discountPercent: number | null;
   equityMultiple: number | null;
-  warnings: string[];
+  dealWarnings: string[];
   occupancyStatus: string | null;
   detailUrl: string | null;
   googleMapsUrl: string | null;
   zillowUrl: string | null;
-  bedrooms: number | null;
-  bathrooms: number | null;
-  squareFeet: number | null;
-  yearBuilt: number | null;
   firstSeen: string | null;
-  lastChanged: string | null;
+  lastUpdated: string | null;
   isNew: boolean;
 }
 
 interface DealsResponse {
-  items: Deal[];
-  count: number;
+  rows: Deal[];
+  total: number;
 }
 
 type Rating = "EXTREME" | "MAJOR" | "STRONG" | "NORMAL" | "all";
@@ -84,7 +79,7 @@ function fmtDate(s: string | null | undefined) {
 
 function DealCard({ deal }: { deal: Deal }) {
   const cfg = RATING_CONFIG[deal.dealRating as keyof typeof RATING_CONFIG] ?? RATING_CONFIG.NORMAL;
-  const addr = [deal.streetAddress, deal.city, deal.state].filter(Boolean).join(", ");
+  const addr = [deal.address, deal.city, deal.state].filter(Boolean).join(", ");
 
   return (
     <div className={`rounded-lg border p-5 ${cfg.bg} ${cfg.border} space-y-4`}>
@@ -115,7 +110,7 @@ function DealCard({ deal }: { deal: Deal }) {
       <div className="grid grid-cols-3 gap-2">
         <div className="rounded-md bg-background/60 border border-border/50 p-2.5 text-center">
           <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Market Value</p>
-          <p className="text-sm font-semibold tabular-nums mt-0.5">{fmt$(deal.marketValueUsed)}</p>
+          <p className="text-sm font-semibold tabular-nums mt-0.5">{fmt$(deal.estimatedMarketValue)}</p>
         </div>
         <div className="rounded-md bg-background/60 border border-border/50 p-2.5 text-center">
           <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Spread</p>
@@ -137,9 +132,9 @@ function DealCard({ deal }: { deal: Deal }) {
       </div>
 
       {/* Warnings */}
-      {deal.warnings.length > 0 && (
+      {(deal.dealWarnings ?? []).length > 0 && (
         <div className="space-y-1">
-          {deal.warnings.map((w) => (
+          {(deal.dealWarnings ?? []).map((w) => (
             <div key={w} className="flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400">
               <AlertTriangle className="w-3 h-3 shrink-0" />
               {w.replace(/_/g, " ")}
@@ -181,26 +176,26 @@ export default function AdminForeclosureDeals() {
   const [rating, setRating] = useState<Rating>("all");
   const [refreshing, setRefreshing] = useState(false);
 
-  const params = new URLSearchParams();
-  if (rating !== "all") params.set("rating", rating);
+  const dealsParams = new URLSearchParams({
+    sort: "deal_score", order: "desc", limit: "200",
+    ...(rating !== "all" ? { deal: rating } : {}),
+  });
 
   const dealsQ = useQuery<DealsResponse>({
     queryKey: ["fc-deals", rating],
-    queryFn: () => fetch(`${BASE}/deals?${params}`).then((r) => r.json()),
+    queryFn: () => fetch(`${BASE}/listings?${dealsParams}`, { credentials: "include" }).then((r) => r.json()),
     refetchInterval: 120_000,
-  });
-
-  const newDealsQ = useQuery<DealsResponse>({
-    queryKey: ["fc-deals-new"],
-    queryFn: () => fetch(`${BASE}/deals/new`).then((r) => r.json()),
   });
 
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
-      await adminFetch("/api/admin/foreclosure-refresh", { method: "POST" });
-      toast({ title: "Refresh started", description: "CivilView scrape is running in the background. New deals will appear in a few minutes." });
-      setTimeout(() => { dealsQ.refetch(); newDealsQ.refetch(); }, 30_000);
+      await Promise.allSettled([
+        fetch(`${BASE}/sync/atlantic`, { method: "POST", credentials: "include" }),
+        fetch(`${BASE}/sync/cape-may`, { method: "POST", credentials: "include" }),
+      ]);
+      toast({ title: "Sync complete", description: "CivilView data refreshed. New deals will appear shortly." });
+      dealsQ.refetch();
     } catch (err: unknown) {
       toast({ title: "Refresh failed", description: err instanceof Error ? err.message : "Unknown error", variant: "destructive" });
     } finally {
@@ -208,10 +203,9 @@ export default function AdminForeclosureDeals() {
     }
   };
 
-  // Normalize: API returns { items: Deal[], count: number }.
-  // normalizeArray handles bare arrays, keyed wrappers, errors, and undefined.
-  const deals    = normalizeArray<Deal>(dealsQ.data,    ["items", "deals", "results"]);
-  const newDeals = normalizeArray<Deal>(newDealsQ.data, ["items", "deals", "results"]);
+  const deals    = normalizeArray<Deal>(dealsQ.data, ["rows", "items", "deals"]);
+  // "New" deals: first_seen within the last 7 days (isNew flag from API)
+  const newDeals = deals.filter((d) => d.isNew);
 
   return (
     <AdminLayout>

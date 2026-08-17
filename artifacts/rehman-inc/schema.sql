@@ -94,6 +94,70 @@ CREATE TABLE IF NOT EXISTS admin_config (
   updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
 );
 
+-- ── Foreclosure Tracker ───────────────────────────────────────────────────────
+-- Apply to production with:
+--   wrangler d1 execute rehman-inc-db --remote --file=schema.sql
+
+CREATE TABLE IF NOT EXISTS foreclosures (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  sheriff_number TEXT UNIQUE NOT NULL,
+  county TEXT NOT NULL DEFAULT 'Atlantic',
+  court_case_number TEXT,
+  current_sale_date TEXT,
+  original_sale_date TEXT,
+  plaintiff TEXT,
+  defendant TEXT,
+  address TEXT,
+  city TEXT,
+  state TEXT,
+  zip_code TEXT,
+  attorney TEXT,
+  approx_judgment REAL,
+  upset_amount REAL,
+  priors_liens_taxes TEXT,
+  tax_lot TEXT,
+  block TEXT,
+  nearest_cross_street TEXT,
+  occupancy_status TEXT,
+  property_notes TEXT,
+  detail_url TEXT,
+  google_maps_url TEXT,
+  zillow_url TEXT,
+  foreclosure_type TEXT DEFAULT 'unknown',
+  classification_confidence TEXT,
+  classification_evidence TEXT,
+  deal_rating TEXT DEFAULT 'UNKNOWN',
+  deal_score REAL,
+  estimated_spread REAL,
+  discount_percent REAL,
+  equity_multiple REAL,
+  deal_warnings TEXT DEFAULT '[]',
+  zillow_estimate REAL,
+  zillow_status TEXT DEFAULT 'NOT_CONFIGURED',
+  zillow_fetched_at TEXT,
+  zillow_property_url TEXT,
+  redfin_estimate REAL,
+  redfin_status TEXT DEFAULT 'NOT_CONFIGURED',
+  redfin_fetched_at TEXT,
+  redfin_property_url TEXT,
+  market_value_used REAL,
+  market_value_source TEXT DEFAULT 'NONE',
+  valuation_updated_at TEXT,
+  status_history TEXT DEFAULT '[]',
+  permanently_excluded INTEGER DEFAULT 0,
+  is_removed INTEGER DEFAULT 0,
+  first_seen TEXT,
+  last_seen TEXT,
+  last_updated TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_fc_county ON foreclosures(county);
+CREATE INDEX IF NOT EXISTS idx_fc_upset ON foreclosures(upset_amount);
+CREATE INDEX IF NOT EXISTS idx_fc_sale_date ON foreclosures(current_sale_date);
+CREATE INDEX IF NOT EXISTS idx_fc_rating ON foreclosures(deal_rating);
+CREATE INDEX IF NOT EXISTS idx_fc_market ON foreclosures(market_value_used);
+CREATE INDEX IF NOT EXISTS idx_fc_discount ON foreclosures(discount_percent);
+
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_inquiries_created_at ON inquiries(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_inquiries_status ON inquiries(status);

@@ -7,3 +7,4 @@
 - [Permanently excluded properties](permanently-excluded.md) — `permanently_excluded` column keeps Fairway Lane timeshares and scraper-restored vacant lots hidden permanently.
 - [RentCast AVM integration](rentcast-avm.md) — third valuation source; address+state-only query handles garbled-city (unit number in city field) properties; 500ms between calls.
 - [Cape May CivilView scraper quirks](cape-may-scraper.md) — upset in Description free text; 3-part BR addresses for condos; Ocean City must not be city-stripped for Zillow/Redfin.
+- [Cloudflare foreclosure migration](cloudflare-foreclosure-migration.md) — cheerio→regex HTML parsing; D1 raw SQL; env vars must be set in Cloudflare dashboard; MAX_DETAIL_PAGES=40 per sync call.

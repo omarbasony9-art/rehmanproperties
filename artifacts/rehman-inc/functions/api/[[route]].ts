@@ -12,6 +12,17 @@ import {
   checkAdminPassword,
 } from "../_auth";
 import { sendInquiryEmail } from "../_email";
+import {
+  ensureForeclosuresTable,
+  runSync,
+  queryListings,
+  queryStats,
+  getForeclosureBySherifffNumber,
+  valuateListing,
+  recalculateListing,
+  updateRedfinEstimate,
+  VALID_COUNTIES,
+} from "../_foreclosures";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -23,6 +34,11 @@ type Env = {
   INQUIRY_NOTIFICATION_EMAIL?: string;
   SESSION_SECRET: string;
   ADMIN_PASSWORD?: string;
+  // Foreclosure valuation providers (optional — gracefully degraded when absent)
+  ZILLOW_RAPIDAPI_KEY?: string;
+  ZILLOW_RAPIDAPI_HOST?: string;
+  REDFIN_RAPIDAPI_KEY?: string;
+  REDFIN_RAPIDAPI_HOST?: string;
 };
 
 const {
@@ -1043,6 +1059,144 @@ app.post("/site/seed", async (c) => {
   }
 
   return c.json({ ok: true, inserted, total: DEFAULT_SETTINGS.length });
+});
+
+// ══════════════════════════════════════════════════════════════════════════
+// FORECLOSURE TRACKER
+// ══════════════════════════════════════════════════════════════════════════
+
+// ── Schema init helper (run once per cold-start, idempotent) ────────────────
+let fcSchemaReady = false;
+async function ensureFcSchema(env: Env): Promise<void> {
+  if (fcSchemaReady) return;
+  await ensureForeclosuresTable(env.DB);
+  fcSchemaReady = true;
+}
+
+// GET /api/foreclosures/listings — public (no auth required)
+app.get("/foreclosures/listings", async (c) => {
+  await ensureFcSchema(c.env);
+  const q = c.req.query;
+  const county = q("county") ?? undefined;
+  const search = q("search") ?? undefined;
+  const deal = q("deal") ?? undefined;
+  const type = q("type") ?? undefined;
+  const upsetMaxRaw = q("upsetMax");
+  const upsetMax = upsetMaxRaw ? parseFloat(upsetMaxRaw) : undefined;
+  const sort = q("sort") ?? undefined;
+  const order = (q("order") ?? "desc") as "asc" | "desc";
+  const limitRaw = q("limit");
+  const limit = limitRaw ? Math.min(parseInt(limitRaw), 500) : 200;
+  const offsetRaw = q("offset");
+  const offset = offsetRaw ? parseInt(offsetRaw) : 0;
+
+  const { rows, total } = await queryListings(c.env.DB, {
+    county, search, deal, type, upsetMax, sort, order, limit, offset,
+  });
+  return c.json({ rows, total, limit, offset });
+});
+
+// GET /api/foreclosures/stats — public
+app.get("/foreclosures/stats", async (c) => {
+  await ensureFcSchema(c.env);
+  const stats = await queryStats(c.env.DB);
+  return c.json(stats);
+});
+
+// GET /api/foreclosures/listings/:sheriffNumber — public
+app.get("/foreclosures/listings/:sheriff", async (c) => {
+  await ensureFcSchema(c.env);
+  const sheriff = c.req.param("sheriff");
+  if (!sheriff) return c.json({ error: "sheriff_number required" }, 400);
+  const row = await getForeclosureBySherifffNumber(c.env.DB, sheriff.toUpperCase());
+  if (!row) return c.json({ error: "Not found" }, 404);
+  return c.json(row);
+});
+
+// POST /api/foreclosures/sync/:county — admin only
+app.post("/foreclosures/sync/:county", async (c) => {
+  const token = getCookie(c, COOKIE_NAME);
+  if (!(await isAuthed(c as never, token))) return unauthed(c);
+
+  const countySlug = c.req.param("county");
+  if (!VALID_COUNTIES.includes(countySlug)) {
+    return c.json({ error: `Unknown county. Valid: ${VALID_COUNTIES.join(", ")}` }, 400);
+  }
+
+  await ensureFcSchema(c.env);
+
+  const fcEnv = {
+    ZILLOW_RAPIDAPI_KEY: c.env.ZILLOW_RAPIDAPI_KEY,
+    ZILLOW_RAPIDAPI_HOST: c.env.ZILLOW_RAPIDAPI_HOST,
+    REDFIN_RAPIDAPI_KEY: c.env.REDFIN_RAPIDAPI_KEY,
+    REDFIN_RAPIDAPI_HOST: c.env.REDFIN_RAPIDAPI_HOST,
+  };
+
+  try {
+    const summary = await runSync(countySlug, c.env.DB, fcEnv);
+    return c.json({ ok: true, ...summary });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[foreclosures/sync] error:", err);
+    return c.json({ error: msg }, 500);
+  }
+});
+
+// POST /api/foreclosures/listings/:sheriff/valuate — admin only
+app.post("/foreclosures/listings/:sheriff/valuate", async (c) => {
+  const token = getCookie(c, COOKIE_NAME);
+  if (!(await isAuthed(c as never, token))) return unauthed(c);
+  await ensureFcSchema(c.env);
+  const sheriff = c.req.param("sheriff")?.toUpperCase();
+  if (!sheriff) return c.json({ error: "sheriff_number required" }, 400);
+  const fcEnv = {
+    ZILLOW_RAPIDAPI_KEY: c.env.ZILLOW_RAPIDAPI_KEY,
+    ZILLOW_RAPIDAPI_HOST: c.env.ZILLOW_RAPIDAPI_HOST,
+    REDFIN_RAPIDAPI_KEY: c.env.REDFIN_RAPIDAPI_KEY,
+    REDFIN_RAPIDAPI_HOST: c.env.REDFIN_RAPIDAPI_HOST,
+  };
+  try {
+    const result = await valuateListing(c.env.DB, sheriff, fcEnv);
+    const row = await getForeclosureBySherifffNumber(c.env.DB, sheriff);
+    return c.json({ ok: true, ...result, listing: row });
+  } catch (err) {
+    return c.json({ error: err instanceof Error ? err.message : String(err) }, 500);
+  }
+});
+
+// POST /api/foreclosures/listings/:sheriff/recalculate — admin only
+app.post("/foreclosures/listings/:sheriff/recalculate", async (c) => {
+  const token = getCookie(c, COOKIE_NAME);
+  if (!(await isAuthed(c as never, token))) return unauthed(c);
+  await ensureFcSchema(c.env);
+  const sheriff = c.req.param("sheriff")?.toUpperCase();
+  if (!sheriff) return c.json({ error: "sheriff_number required" }, 400);
+  try {
+    const result = await recalculateListing(c.env.DB, sheriff);
+    const row = await getForeclosureBySherifffNumber(c.env.DB, sheriff);
+    return c.json({ ok: true, ...result, listing: row });
+  } catch (err) {
+    return c.json({ error: err instanceof Error ? err.message : String(err) }, 500);
+  }
+});
+
+// PATCH /api/foreclosures/listings/:sheriff/redfin — admin only
+app.patch("/foreclosures/listings/:sheriff/redfin", async (c) => {
+  const token = getCookie(c, COOKIE_NAME);
+  if (!(await isAuthed(c as never, token))) return unauthed(c);
+  await ensureFcSchema(c.env);
+  const sheriff = c.req.param("sheriff")?.toUpperCase();
+  if (!sheriff) return c.json({ error: "sheriff_number required" }, 400);
+  const body = await c.req.json<{ estimate?: unknown }>();
+  const estimate = typeof body.estimate === "number" && body.estimate > 0 ? body.estimate : null;
+  if (!estimate) return c.json({ error: "estimate must be a positive number" }, 400);
+  try {
+    const result = await updateRedfinEstimate(c.env.DB, sheriff, estimate);
+    const row = await getForeclosureBySherifffNumber(c.env.DB, sheriff);
+    return c.json({ ok: true, ...result, listing: row });
+  } catch (err) {
+    return c.json({ error: err instanceof Error ? err.message : String(err) }, 500);
+  }
 });
 
 // ══════════════════════════════════════════════════════════════════════════
