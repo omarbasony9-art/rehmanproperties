@@ -1,0 +1,185 @@
+Update the existing **Rehman INC** website so that whenever anyone submits an inquiry anywhere on the website, the inquiry is automatically emailed to:
+
+**[Aliproperties91@gmail.com](mailto:Aliproperties91@gmail.com)**
+
+Do NOT just create a `mailto:` link.
+
+I want the website backend to automatically send the email after the visitor presses Submit.
+
+# FORMS THAT MUST SEND EMAILS
+
+Make sure this applies to ALL inquiry forms, including:
+
+* Get My Cash Offer form
+* Sell Your House form
+* Property inquiry form
+* Contact form
+* Any other lead/contact form on the website
+
+Every successfully submitted inquiry must generate an email notification.
+
+# EMAIL DESTINATION
+
+Send every inquiry to:
+
+`Aliproperties91@gmail.com`
+
+Use a server-side environment variable such as:
+
+`INQUIRY_NOTIFICATION_EMAIL=Aliproperties91@gmail.com`
+
+Do NOT expose email API credentials in frontend code.
+
+# PROPERTY INQUIRY EMAIL
+
+Subject:
+
+`NEW PROPERTY INQUIRY — [Property Address] — Rehman INC`
+
+Include:
+
+**Seller Information**
+
+* Name
+* Email
+* Phone
+* Preferred Contact Method
+
+**Property Information**
+
+* Full Property Address
+* City
+* State
+* ZIP
+* Property Type
+* Bedrooms
+* Bathrooms
+* Square Footage
+* Occupancy
+* Property Condition
+* Repairs Needed
+
+**Selling Information**
+
+* Reason for Selling
+* Selling Timeline
+
+**Inquiry Information**
+
+* Inquiry Number
+* Date and Time Submitted
+* Lead Source
+
+**Photos**
+
+* Include secure links to any uploaded property photos
+* Do not attach huge image files directly to the email
+
+# CONTACT FORM EMAIL
+
+When someone uses the normal Contact page, send:
+
+Subject:
+
+`NEW WEBSITE INQUIRY — [Name] — Rehman INC`
+
+Include:
+
+* Name
+* Email
+* Phone
+* Property Address if provided
+* Message
+* Date and Time Submitted
+
+# IMPORTANT DELIVERY REQUIREMENTS
+
+Use the existing backend email service if one is already configured.
+
+If email sending is NOT currently configured, use a simple low-cost transactional email provider such as Resend.
+
+Do not add an expensive service.
+
+Keep email sending completely server-side.
+
+The flow should be:
+
+1. Visitor fills out inquiry.
+2. Visitor presses Submit.
+3. Validate the submission server-side.
+4. Save the inquiry to the existing database.
+5. Send an email notification to `Aliproperties91@gmail.com`.
+6. Show the visitor the success screen.
+
+IMPORTANT:
+
+Saving the lead and emailing the lead are two separate operations.
+
+If email delivery temporarily fails:
+
+* DO NOT delete or lose the inquiry.
+* Keep the inquiry saved in the database.
+* Log the email error.
+* Return a safe response to the user.
+* Make the failure visible in server logs/admin so it can be corrected.
+
+# SPAM PROTECTION
+
+Keep or add inexpensive Cloudflare-compatible protection:
+
+* Rate limiting
+* Server-side validation
+* Cloudflare Turnstile compatibility
+* Honeypot field if appropriate
+
+Do not make legitimate homeowners complete annoying CAPTCHA puzzles unless necessary.
+
+# EMAIL SENDER
+
+Do NOT attempt to spoof `Aliproperties91@gmail.com` as the sender.
+
+Use the properly configured sender address/domain from the email service.
+
+Set the homeowner's submitted email as the Reply-To address when supported so Ali can simply press Reply from Gmail.
+
+Example:
+
+From:
+`Rehman INC Website <inquiries@configured-domain.com>`
+
+To:
+`Aliproperties91@gmail.com`
+
+Reply-To:
+`[homeowner's submitted email]`
+
+# TEST IT
+
+After implementing this, perform an end-to-end test.
+
+Submit a fake TEST inquiry through the actual website form and verify:
+
+* Form submits successfully
+* Inquiry gets saved
+* Backend email function runs
+* Email is addressed to [Aliproperties91@gmail.com](mailto:Aliproperties91@gmail.com)
+* Subject contains the property address
+* Name is included
+* Phone is included
+* Email is included
+* Property information is included
+* Message/reason for selling is included
+* Photos appear as links if provided
+* No API secrets are exposed in browser code
+
+If an email API key, verified sending domain, DNS record, or environment variable is still required from me, STOP and tell me EXACTLY:
+
+1. What I need to create
+2. Where I need to get it
+3. The exact secret/environment variable name
+4. Where I need to paste it
+5. Any DNS records that need to be added
+
+Do not simply tell me the code is complete if real email delivery has not actually been configured.
+
+Keep everything as cheap as reasonably possible and do not change the rest of the Rehman INC website.
