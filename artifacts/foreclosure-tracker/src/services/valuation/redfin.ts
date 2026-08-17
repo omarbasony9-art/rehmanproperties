@@ -17,6 +17,7 @@ export type RedfinStatus = "SUCCESS" | "NOT_FOUND" | "NOT_CONFIGURED" | "ERROR";
 export interface RedfinResult {
   estimate: number | null;
   status: RedfinStatus;
+  rateLimited?: boolean;  // true when a 429 was received — do NOT write ERROR to DB
   source: "REDFIN";
   propertyUrl: string | null;
   fetchedAt: Date;
@@ -27,6 +28,9 @@ const notFound = (): RedfinResult => ({
 });
 const error = (): RedfinResult => ({
   estimate: null, status: "ERROR", source: "REDFIN", propertyUrl: null, fetchedAt: new Date(),
+});
+const rateLimited = (): RedfinResult => ({
+  estimate: null, status: "ERROR", rateLimited: true, source: "REDFIN", propertyUrl: null, fetchedAt: new Date(),
 });
 
 export async function fetchRedfinEstimate(
@@ -67,7 +71,7 @@ export async function fetchRedfinEstimate(
       );
 
       if (!acResp.ok) {
-        if (acResp.status === 429) { console.warn("[redfin] rate limit hit"); return error(); }
+        if (acResp.status === 429) { console.warn("[redfin] rate limit hit"); return rateLimited(); }
         continue;
       }
 
@@ -85,6 +89,9 @@ export async function fetchRedfinEstimate(
       return notFound();
     }
 
+    // Brief pause between the two calls to stay within per-second rate limits
+    await new Promise((r) => setTimeout(r, 1200));
+
     // ── Step 2: URL → property detail ────────────────────────────────────────
     const detailResp = await fetch(
       `https://${host}/property/detail?url=${encodeURIComponent(redfinUrl)}`,
@@ -93,7 +100,7 @@ export async function fetchRedfinEstimate(
 
     if (!detailResp.ok) {
       console.warn(`[redfin] /property/detail HTTP ${detailResp.status} for "${redfinUrl}"`);
-      return detailResp.status === 429 ? error() : notFound();
+      return detailResp.status === 429 ? rateLimited() : notFound();
     }
 
     const detailBody = await detailResp.json() as Record<string, unknown>;

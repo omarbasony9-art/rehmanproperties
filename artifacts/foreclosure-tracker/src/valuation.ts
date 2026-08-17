@@ -123,7 +123,7 @@ export async function lookupRedfinValuation(
   state: string,
   zip: string,
   force = false,
-): Promise<"fetched" | "cached" | "skipped" | "error"> {
+): Promise<"fetched" | "cached" | "skipped" | "error" | "rate_limited"> {
   const apiKey = process.env["REDFIN_RAPIDAPI_KEY"];
   if (!apiKey) {
     await query(
@@ -148,6 +148,9 @@ export async function lookupRedfinValuation(
 
   try {
     const result = await fetchRedfinEstimate(address, city, state, zip);
+
+    // Rate limited — do NOT persist ERROR to DB; leave the row untouched so it retries next run
+    if (result.rateLimited) return "rate_limited";
 
     await query(
       `UPDATE foreclosures SET
@@ -208,11 +211,16 @@ export async function runBulkRedfinRefresh(force = false, noThreshold = false): 
     const outcome = await lookupRedfinValuation(
       prop.sheriff_number, prop.address, prop.city, prop.state, prop.zip_code, force,
     );
-    if (outcome === "fetched")       stats.fetched++;
-    else if (outcome === "cached")   stats.cached++;
-    else if (outcome === "error")    stats.errors++;
-    else                             stats.skipped++;
-    await sleep(500); // slightly longer delay for Redfin rate limits
+    if (outcome === "fetched")         stats.fetched++;
+    else if (outcome === "cached")     stats.cached++;
+    else if (outcome === "rate_limited") {
+      // Hard stop — preserve remaining rows as null so they retry next run
+      console.warn("[valuations/redfin-refresh] Rate limit hit — stopping early to avoid polluting DB");
+      break;
+    }
+    else if (outcome === "error")      stats.errors++;
+    else                               stats.skipped++;
+    await sleep(2000); // 2s gap between properties (plus 1.2s internal = ~3.2s per fetch)
   }
 
   return stats;

@@ -437,7 +437,7 @@ export default function AdminForeclosures() {
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
-      await adminFetch("/api/admin/foreclosure-refresh", { method: "POST" });
+      await adminFetch("/admin/foreclosure-refresh", { method: "POST" });
       toast({ title: "Refresh started", description: "CivilView scrape running in background." });
       setTimeout(() => { healthQ.refetch(); listQ.refetch(); }, 8000);
     } catch (err) {
