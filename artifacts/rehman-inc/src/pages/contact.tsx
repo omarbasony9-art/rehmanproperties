@@ -6,7 +6,7 @@ import { LightPageHero } from "@/components/layout/page-hero";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Mail, CheckCircle } from "lucide-react";
+import { Mail, Phone, Instagram, CheckCircle } from "lucide-react";
 import { useSEO } from "@/hooks/use-seo";
 import { useSubmitInquiry } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
@@ -189,29 +189,58 @@ export default function ContactPage() {
             
             {/* Info Column */}
             <div className="lg:w-1/3">
-              <div className="bg-muted/40 border border-border p-8 rounded-xl h-full">
-                <h3 className="font-serif text-2xl font-bold mb-8">Contact Information</h3>
-                
-                <div className="flex items-start gap-4 mb-12">
-                  <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                    <Mail className="w-5 h-5 text-primary" />
-                  </div>
-                  <div>
-                    <h4 className="font-medium text-foreground mb-1">Email</h4>
-                    <a href="mailto:Aliproperties91@gmail.com" className="text-muted-foreground hover:text-primary transition-colors">
-                      Aliproperties91@gmail.com
-                    </a>
-                  </div>
+              <div className="bg-muted/40 border border-border p-8 rounded-xl">
+                <h3 className="font-serif text-2xl font-bold mb-2">Contact Information</h3>
+                <p className="text-lg font-semibold text-foreground mb-8">Ali Rehman</p>
+
+                <div className="space-y-6 mb-10">
+                  <a
+                    href="tel:+16095821061"
+                    className="flex items-center gap-4 group"
+                  >
+                    <div className="w-11 h-11 rounded-full bg-primary/10 flex items-center justify-center shrink-0 group-hover:bg-primary/20 transition-colors">
+                      <Phone className="w-5 h-5 text-primary" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-0.5">Phone</p>
+                      <span className="text-foreground font-medium group-hover:text-primary transition-colors">609-582-1061</span>
+                    </div>
+                  </a>
+
+                  <a
+                    href="mailto:Aliproperties91@gmail.com"
+                    className="flex items-center gap-4 group"
+                  >
+                    <div className="w-11 h-11 rounded-full bg-primary/10 flex items-center justify-center shrink-0 group-hover:bg-primary/20 transition-colors">
+                      <Mail className="w-5 h-5 text-primary" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-0.5">Email</p>
+                      <span className="text-foreground font-medium group-hover:text-primary transition-colors break-all">Aliproperties91@gmail.com</span>
+                    </div>
+                  </a>
+
+                  <a
+                    href="https://www.instagram.com/ali_monopoly/?utm_source=ig_web_button_share_sheet"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-4 group"
+                  >
+                    <div className="w-11 h-11 rounded-full bg-primary/10 flex items-center justify-center shrink-0 group-hover:bg-primary/20 transition-colors">
+                      <Instagram className="w-5 h-5 text-primary" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-0.5">Instagram</p>
+                      <span className="text-foreground font-medium group-hover:text-primary transition-colors">@ali_monopoly</span>
+                    </div>
+                  </a>
                 </div>
-                
-                <div className="space-y-6 pt-8 border-t border-border">
+
+                <div className="space-y-4 pt-8 border-t border-border">
                   <p className="text-sm text-muted-foreground leading-relaxed">
-                    Property-selling inquiries submitted through our website are processed by our team and forwarded as needed.
+                    For the fastest evaluation, use our direct offer form.
                   </p>
-                  <p className="text-sm text-muted-foreground leading-relaxed">
-                    For the fastest evaluation of a property, we recommend using our direct offer form.
-                  </p>
-                  <Button variant="outline" onClick={() => setFormOpen(true)} className="w-full mt-4">
+                  <Button variant="outline" onClick={() => setFormOpen(true)} className="w-full">
                     Get My Cash Offer
                   </Button>
                 </div>

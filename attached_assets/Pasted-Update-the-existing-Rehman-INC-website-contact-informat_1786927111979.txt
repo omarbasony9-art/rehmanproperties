@@ -1,0 +1,124 @@
+Update the existing **Rehman INC** website contact information everywhere it appears.
+
+Do NOT rebuild the website.
+Do NOT change the backend architecture.
+Do NOT add any paid services.
+
+Use these official contact details:
+
+**Name:** Ali Rehman
+**Phone:** 609-582-1061
+**Email:** [Aliproperties91@gmail.com](mailto:Aliproperties91@gmail.com)
+**Instagram:** https://www.instagram.com/ali_monopoly/?utm_source=ig_web_button_share_sheet
+
+# CONTACT PAGE
+
+Update the Contact page to prominently display:
+
+**Ali Rehman**
+
+Phone:
+**609-582-1061**
+
+Email:
+**[Aliproperties91@gmail.com](mailto:Aliproperties91@gmail.com)**
+
+Instagram:
+**@ali_monopoly**
+
+Make the phone number clickable using:
+
+`tel:+16095821061`
+
+Make the email clickable using:
+
+`mailto:Aliproperties91@gmail.com`
+
+Make the Instagram link open:
+
+`https://www.instagram.com/ali_monopoly/?utm_source=ig_web_button_share_sheet`
+
+Open Instagram in a new tab and use appropriate security attributes such as:
+
+`rel="noopener noreferrer"`
+
+# FOOTER
+
+Update the website footer with the same contact information:
+
+**Ali Rehman**
+609-582-1061
+[Aliproperties91@gmail.com](mailto:Aliproperties91@gmail.com)
+Instagram @ali_monopoly
+
+Make all applicable items clickable.
+
+Do not display the full ugly Instagram URL as visible text. Show:
+
+**Instagram**
+
+or
+
+**@ali_monopoly**
+
+while linking it to the full URL.
+
+# MOBILE
+
+Make sure:
+
+* Tapping the phone number opens the phone dialer.
+* Tapping the email opens the user's email app.
+* Tapping Instagram opens the Instagram profile.
+* Contact information is easy to read on mobile.
+
+# INQUIRY EMAIL DESTINATION
+
+Keep all property inquiry notifications going to:
+
+**[Aliproperties91@gmail.com](mailto:Aliproperties91@gmail.com)**
+
+Do not accidentally change or remove the existing inquiry email delivery.
+
+# SITEWIDE CHECK
+
+Search the entire project for any:
+
+* Placeholder phone numbers
+* Placeholder email addresses
+* Placeholder contact names
+* Placeholder social media links
+* Old Instagram links
+
+Replace them with the correct Rehman INC information where appropriate.
+
+Do NOT replace unrelated technical/admin email settings unless they are specifically intended to represent the public Rehman INC contact email.
+
+# SOCIAL ICONS
+
+If the website already has an Instagram icon:
+
+Make it link directly to:
+
+`https://www.instagram.com/ali_monopoly/?utm_source=ig_web_button_share_sheet`
+
+If there is no Instagram icon, add a simple professional Instagram icon to the footer/contact area.
+
+Do not add a large unnecessary social-media section.
+
+# FINAL CHECK
+
+After updating:
+
+1. Confirm Ali Rehman appears correctly.
+2. Confirm phone number is 609-582-1061.
+3. Confirm phone link uses +16095821061.
+4. Confirm email is [Aliproperties91@gmail.com](mailto:Aliproperties91@gmail.com).
+5. Confirm property inquiries still go to [Aliproperties91@gmail.com](mailto:Aliproperties91@gmail.com).
+6. Confirm Instagram goes to @ali_monopoly.
+7. Check desktop.
+8. Check mobile.
+9. Run the production build.
+10. Fix any errors.
+
+Make these changes now.
