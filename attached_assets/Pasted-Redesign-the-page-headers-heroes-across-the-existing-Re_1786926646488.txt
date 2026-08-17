@@ -1,0 +1,405 @@
+Redesign the page headers/heroes across the existing **Rehman INC** website.
+
+DO NOT rebuild the website from scratch.
+DO NOT change the backend.
+DO NOT add any paid services.
+This is a frontend design improvement only.
+
+The current page headers look too empty, generic, repetitive, and AI-generated.
+
+Right now several pages are basically:
+
+* Huge dark empty area
+* One small gray sentence
+* Too much unused space
+* Same layout on every page
+
+I want the page headers to look like a premium, modern real estate investment company designed by a professional agency.
+
+# NEW DESIGN DIRECTION
+
+Use a much stronger visual hierarchy.
+
+Each internal page hero should generally contain:
+
+1. Small section label / eyebrow
+2. Large page title
+3. Short supporting sentence
+4. Optional CTA where appropriate
+5. Subtle visual element, property photography, architectural texture, or refined layout treatment
+
+The title needs to be the visual focus.
+
+Example structure:
+
+SELL YOUR PROPERTY
+
+# A Better Way to Sell Your House.
+
+Tell us about your property and see whether selling directly to Rehman INC makes sense for you.
+
+[ GET MY CASH OFFER ]
+
+Do NOT make the subtitle the only visible content.
+
+---
+
+# DESIGN STYLE
+
+Keep the Rehman INC brand:
+
+* Deep charcoal / black
+* Warm off-white
+* Deep emerald green
+* Very subtle gold accents
+* High-end typography
+* Clean spacing
+
+Make it:
+
+* Modern
+* Strong
+* Professional
+* Real estate focused
+* Clean
+* Editorial
+* Premium
+* Human designed
+
+Avoid:
+
+* Glowing gradients
+* Random floating shapes
+* Giant empty blocks
+* Excessive rounded cards
+* SaaS-style graphics
+* Generic AI layouts
+* Overuse of icons
+* Huge unnecessary whitespace
+* Repeating the exact same hero on every page
+
+---
+
+# IMPORTANT: VARY THE PAGE HEADERS
+
+The pages should share the same brand system but NOT all look identical.
+
+Create 2–3 reusable hero/header variants and use them intelligently.
+
+For example:
+
+### STYLE A — SPLIT HERO
+
+Left:
+
+* Small green eyebrow text
+* Large white headline
+* Short description
+* CTA
+
+Right:
+
+* High-quality property image
+
+Use this for pages such as:
+
+* Sell Your House
+* Why Us
+
+---
+
+### STYLE B — EDITORIAL HERO
+
+Dark background.
+
+Large title aligned left.
+
+Small section label above it.
+
+Supporting text below.
+
+Add a subtle architectural/property image or texture positioned to the right or faded into the background.
+
+Use for:
+
+* How It Works
+* FAQ
+
+---
+
+### STYLE C — LIGHT HERO
+
+Warm off-white background.
+
+Dark headline.
+
+Green accent line or small label.
+
+Optional smaller property image.
+
+Use this to break up the visual repetition.
+
+Good for:
+
+* Properties
+* Contact
+
+---
+
+# PAGE-SPECIFIC COPY
+
+Update the hero copy so each page actually has a meaningful headline.
+
+## SELL YOUR HOUSE
+
+Eyebrow:
+
+SELL DIRECTLY
+
+Headline:
+
+**Sell Your Property Without the Traditional Hassle.**
+
+Supporting text:
+
+Tell us about your property and see whether Rehman INC is the right fit for your situation.
+
+CTA:
+
+**GET MY CASH OFFER**
+
+---
+
+## HOW IT WORKS
+
+Eyebrow:
+
+THE PROCESS
+
+Headline:
+
+**A Straightforward Way to Sell.**
+
+Supporting text:
+
+From the first property details to the final conversation, we keep the process clear and direct.
+
+CTA:
+
+**START WITH YOUR PROPERTY**
+
+---
+
+## WHY US
+
+Eyebrow:
+
+WHY REHMAN INC
+
+Headline:
+
+**Real Estate. Direct Conversations. Clear Decisions.**
+
+Supporting text:
+
+We provide property owners with an alternative to the traditional listing process.
+
+CTA:
+
+**TELL US ABOUT YOUR PROPERTY**
+
+---
+
+## PROPERTIES
+
+Eyebrow:
+
+OUR PORTFOLIO
+
+Headline:
+
+**Real Estate We Acquire and Manage.**
+
+Supporting text:
+
+Explore the types of properties that fit the Rehman INC investment strategy.
+
+Do not show fake acquisitions.
+
+---
+
+## FAQ
+
+Eyebrow:
+
+COMMON QUESTIONS
+
+Headline:
+
+**Questions About Selling? Start Here.**
+
+Supporting text:
+
+Learn more about the Rehman INC process and what to expect when you contact us.
+
+---
+
+## CONTACT
+
+Eyebrow:
+
+CONTACT REHMAN INC
+
+Headline:
+
+**Let's Talk About Your Property.**
+
+Supporting text:
+
+Have a property you're considering selling? Send us the details and we'll get in touch.
+
+CTA:
+
+**GET STARTED**
+
+---
+
+# SPACING
+
+The current heroes are too tall for the amount of content they contain.
+
+Fix this.
+
+Desktop internal page hero height should generally be around:
+
+`420px–560px`
+
+depending on content.
+
+Do NOT create massive 700–900px empty header sections.
+
+On mobile, reduce padding appropriately.
+
+The next section of the page should be partially visible without requiring excessive scrolling.
+
+---
+
+# TYPOGRAPHY
+
+Make the headlines much stronger.
+
+Desktop page title:
+
+approximately:
+
+`clamp(44px, 5vw, 72px)`
+
+Use tight but elegant line-height.
+
+Supporting copy:
+
+approximately:
+
+`18px–21px`
+
+Do not make all text gray.
+
+Use:
+
+* White/off-white for primary titles
+* Soft gray for supporting copy
+* Emerald green for small labels and selective accents
+
+Keep line lengths controlled.
+
+Headlines should not stretch across the entire screen.
+
+---
+
+# ADD SUBTLE VISUAL INTEREST
+
+The current dark backgrounds feel empty.
+
+Add subtle visual depth WITHOUT making it flashy.
+
+Good options:
+
+* Property photography
+* Architectural crop
+* Very subtle dark image overlay
+* Thin vertical/horizontal green accent
+* Slight texture
+* Large cropped typography
+* Geometric architectural lines
+
+Do not use fake AI-looking background graphics.
+
+Photography should feel realistic and editorial.
+
+---
+
+# PAGE TRANSITION
+
+Keep the existing behavior where every route automatically opens at the top of the page.
+
+Do not break ScrollToTop.
+
+---
+
+# REUSABLE COMPONENTS
+
+Create reusable components such as:
+
+`PageHero`
+`SplitPageHero`
+`EditorialPageHero`
+
+Do not copy/paste an entire hero implementation separately into every page.
+
+Allow props for:
+
+* eyebrow
+* title
+* description
+* image
+* CTA
+* theme
+* alignment
+
+This keeps maintenance cheap and easy.
+
+---
+
+# IMPORTANT
+
+Do not modify:
+
+* Inquiry backend
+* Email delivery
+* [Aliproperties91@gmail.com](mailto:Aliproperties91@gmail.com) destination
+* Database
+* Photo uploads
+* Admin functionality
+* Cloudflare architecture
+* Existing forms
+
+Only improve the frontend page headers and supporting visual presentation.
+
+---
+
+# FINAL CHECK
+
+After making the changes:
+
+1. Check every internal page.
+2. Make sure no two consecutive pages feel identical.
+3. Make sure each page has a strong visible H1.
+4. Remove excessive empty space.
+5. Check desktop.
+6. Check tablet.
+7. Check mobile.
+8. Make sure header/navigation remains consistent.
+9. Make sure every new page still opens at the top.
+10. Run the production build and fix all errors.
+
+Make these changes now. Do not just tell me what you would change.

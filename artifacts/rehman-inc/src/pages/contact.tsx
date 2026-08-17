@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Navbar } from "@/components/layout/navbar";
 import { Footer } from "@/components/layout/footer";
 import { MultiStepForm } from "@/components/marketing/multi-step-form";
+import { LightPageHero } from "@/components/layout/page-hero";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -81,15 +82,13 @@ export default function ContactPage() {
     <div className="min-h-screen bg-background text-foreground">
       <Navbar onOpenForm={() => setFormOpen(true)} />
       
-      {/* PAGE HERO */}
-      <section className="pt-32 pb-16 bg-foreground text-background">
-        <div className="container mx-auto px-4">
-          <h1 className="font-serif text-5xl md:text-6xl font-bold mb-4">Contact Us</h1>
-          <p className="text-xl text-background/70 max-w-2xl">
-            Reach out with any questions or to discuss a specific property.
-          </p>
-        </div>
-      </section>
+      <LightPageHero
+        eyebrow="Contact Rehman INC"
+        title="Let's Talk About Your Property."
+        description="Have a property you're considering selling? Send us the details and we'll get in touch."
+        ctaLabel="Get Started"
+        onCtaClick={() => setFormOpen(true)}
+      />
 
       {/* CONTACT SECTION */}
       <section className="py-24 bg-background">

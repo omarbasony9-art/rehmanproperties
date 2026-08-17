@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Navbar } from "@/components/layout/navbar";
 import { Footer } from "@/components/layout/footer";
 import { MultiStepForm } from "@/components/marketing/multi-step-form";
+import { SplitPageHero } from "@/components/layout/page-hero";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ArrowRight, Check } from "lucide-react";
@@ -40,32 +41,26 @@ export default function SellYourHousePage() {
     <div className="min-h-screen bg-background text-foreground">
       <Navbar onOpenForm={() => setFormOpen(true)} />
       
-      {/* HERO */}
-      <section className="pt-32 pb-24 bg-foreground text-background">
-        <div className="container mx-auto px-4 text-center">
-          <h1 className="font-serif text-5xl md:text-7xl font-bold mb-6 max-w-4xl mx-auto leading-tight">
-            Ready to Sell Your House?
-          </h1>
-          <p className="text-xl text-background/70 max-w-2xl mx-auto mb-12">
-            Get a direct cash offer for your property in any condition. No repairs, no showings, no agents.
-          </p>
-          
-          <div className="w-full max-w-2xl mx-auto bg-background/10 backdrop-blur-md p-2 rounded-lg border border-background/20">
-            <form onSubmit={handleGetStarted} className="flex flex-col md:flex-row gap-2">
-              <Input 
-                placeholder="Enter your property address..." 
-                className="h-14 md:h-16 text-lg bg-background/90 text-foreground border-transparent placeholder:text-muted-foreground focus-visible:ring-0"
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
-                required
-              />
-              <Button type="submit" className="h-14 md:h-16 px-8 text-lg font-bold w-full md:w-auto shrink-0 bg-primary hover:bg-primary/90 text-primary-foreground">
-                Start Inquiry <ArrowRight className="ml-2 w-5 h-5" />
-              </Button>
-            </form>
-          </div>
-        </div>
-      </section>
+      <SplitPageHero
+        eyebrow="Sell Directly"
+        title="Sell Your Property Without the Traditional Hassle."
+        description="Tell us about your property and see whether Rehman INC is the right fit for your situation."
+        image={`${import.meta.env.BASE_URL}property-1.jpg`}
+        imageAlt="Residential property"
+      >
+        <form onSubmit={handleGetStarted} className="flex flex-col sm:flex-row gap-2 max-w-lg">
+          <Input
+            placeholder="Enter your property address..."
+            className="h-12 bg-white/10 border-white/20 text-white placeholder:text-white/40 focus-visible:ring-primary focus-visible:border-primary"
+            value={address}
+            onChange={(e) => setAddress(e.target.value)}
+            required
+          />
+          <Button type="submit" className="h-12 px-7 font-semibold bg-primary hover:bg-primary/90 text-primary-foreground shrink-0 rounded-sm tracking-wide">
+            Get My Cash Offer <ArrowRight className="ml-2 w-4 h-4" />
+          </Button>
+        </form>
+      </SplitPageHero>
 
       {/* BENEFITS STRIP */}
       <section className="py-12 bg-muted/40 border-b border-border">

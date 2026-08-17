@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Navbar } from "@/components/layout/navbar";
 import { Footer } from "@/components/layout/footer";
 import { MultiStepForm } from "@/components/marketing/multi-step-form";
+import { SplitPageHero } from "@/components/layout/page-hero";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, X, Check } from "lucide-react";
 import { useSEO } from "@/hooks/use-seo";
@@ -18,15 +19,16 @@ export default function WhyUsPage() {
     <div className="min-h-screen bg-background text-foreground">
       <Navbar onOpenForm={() => setFormOpen(true)} />
       
-      {/* PAGE HERO */}
-      <section className="pt-32 pb-16 bg-foreground text-background">
-        <div className="container mx-auto px-4">
-          <h1 className="font-serif text-5xl md:text-6xl font-bold mb-4">Why Rehman INC</h1>
-          <p className="text-xl text-background/70 max-w-2xl">
-            A sensible alternative to the traditional real estate market.
-          </p>
-        </div>
-      </section>
+      <SplitPageHero
+        eyebrow="Why Rehman INC"
+        title="Real Estate. Direct Conversations. Clear Decisions."
+        description="We provide property owners with an alternative to the traditional listing process."
+        ctaLabel="Tell Us About Your Property"
+        onCtaClick={() => setFormOpen(true)}
+        image={`${import.meta.env.BASE_URL}property-2.jpg`}
+        imageAlt="Investment property"
+        imageLeft
+      />
 
       {/* COMPARISON LAYOUT */}
       <section className="py-24 bg-background">

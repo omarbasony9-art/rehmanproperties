@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Navbar } from "@/components/layout/navbar";
 import { Footer } from "@/components/layout/footer";
 import { MultiStepForm } from "@/components/marketing/multi-step-form";
+import { EditorialPageHero } from "@/components/layout/page-hero";
 import { Button } from "@/components/ui/button";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { useSEO } from "@/hooks/use-seo";
@@ -48,15 +49,12 @@ export default function FaqPage() {
     <div className="min-h-screen bg-background text-foreground">
       <Navbar onOpenForm={() => setFormOpen(true)} />
       
-      {/* PAGE HERO */}
-      <section className="pt-32 pb-16 bg-foreground text-background">
-        <div className="container mx-auto px-4">
-          <h1 className="font-serif text-5xl md:text-6xl font-bold mb-4">Frequently Asked Questions</h1>
-          <p className="text-xl text-background/70 max-w-2xl">
-            Clear answers about our direct property purchasing process.
-          </p>
-        </div>
-      </section>
+      <EditorialPageHero
+        eyebrow="Common Questions"
+        title="Questions About Selling? Start Here."
+        description="Learn more about the Rehman INC process and what to expect when you contact us."
+        showLines
+      />
 
       {/* FAQ CONTENT */}
       <section className="py-24 bg-background">

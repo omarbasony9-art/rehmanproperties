@@ -3,6 +3,7 @@ import { Link } from "wouter";
 import { Navbar } from "@/components/layout/navbar";
 import { Footer } from "@/components/layout/footer";
 import { MultiStepForm } from "@/components/marketing/multi-step-form";
+import { EditorialPageHero } from "@/components/layout/page-hero";
 import { Button } from "@/components/ui/button";
 import { ArrowRight } from "lucide-react";
 import { useSEO } from "@/hooks/use-seo";
@@ -51,15 +52,15 @@ export default function HowItWorksPage() {
     <div className="min-h-screen bg-background text-foreground">
       <Navbar onOpenForm={() => setFormOpen(true)} />
       
-      {/* PAGE HERO */}
-      <section className="pt-32 pb-16 bg-foreground text-background">
-        <div className="container mx-auto px-4">
-          <h1 className="font-serif text-5xl md:text-6xl font-bold mb-6">How It Works</h1>
-          <p className="text-xl text-background/70 max-w-2xl">
-            A straightforward, direct approach to selling your property without the usual complications.
-          </p>
-        </div>
-      </section>
+      <EditorialPageHero
+        eyebrow="The Process"
+        title="A Straightforward Way to Sell."
+        description="From the first property details to the final conversation, we keep the process clear and direct."
+        ctaLabel="Start With Your Property"
+        onCtaClick={() => setFormOpen(true)}
+        bgImage={`${import.meta.env.BASE_URL}hero-home.jpg`}
+        showLines
+      />
 
       {/* PROCESS SECTION */}
       <section className="py-24 bg-background">
