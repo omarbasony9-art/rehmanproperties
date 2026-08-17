@@ -136,7 +136,7 @@ export function EditorialPageHero({
       {/* Background photo (very faded) */}
       {bgImage && (
         <div className="absolute inset-0 pointer-events-none">
-          <img src={bgImage} alt="" className="absolute inset-0 w-full h-full object-cover opacity-30" aria-hidden />
+          <img src={bgImage} alt="" className="absolute inset-0 w-full h-full object-cover opacity-55" aria-hidden />
           <div className="absolute inset-0 bg-gradient-to-r from-[hsl(220,20%,4%)] via-[hsl(220,20%,4%)]/70 to-transparent" />
         </div>
       )}
