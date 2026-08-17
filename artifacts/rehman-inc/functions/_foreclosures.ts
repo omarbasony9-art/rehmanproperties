@@ -58,11 +58,16 @@ interface DetailedListing {
 
 interface ValuationResult {
   estimate: number | null;
+  /** SUCCESS | NOT_CONFIGURED | NOT_FOUND | RATE_LIMITED | ERROR */
   status: string;
   rateLimited?: boolean;
   source: "ZILLOW" | "REDFIN";
   propertyUrl: string | null;
   fetchedAt: Date;
+  // Safe diagnostics — never includes key values
+  httpStatus?: number;   // HTTP status of the first failed call
+  stage?: string;        // "autocomplete" | "detail" | "fetch_error"
+  errorMessage?: string; // sanitised message (no secrets)
 }
 
 export interface SyncSummary {
@@ -590,7 +595,7 @@ async function fetchZillowEstimate(
   env: FcEnv,
 ): Promise<ValuationResult> {
   const apiKey = env.ZILLOW_RAPIDAPI_KEY;
-  if (!apiKey) return { estimate: null, status: "NOT_CONFIGURED", source: "ZILLOW", propertyUrl: null, fetchedAt: new Date() };
+  if (!apiKey) return { estimate: null, status: "NOT_CONFIGURED", source: "ZILLOW", propertyUrl: null, fetchedAt: new Date(), stage: "config" };
 
   const host = env.ZILLOW_RAPIDAPI_HOST ?? "private-zillow.p.rapidapi.com";
   const headers = { "X-RapidAPI-Key": apiKey, "X-RapidAPI-Host": host, "Accept": "application/json" };
@@ -598,10 +603,16 @@ async function fetchZillowEstimate(
 
   try {
     let zpid: string | number | undefined;
+    let lastAcStatus: number | undefined;
     for (const query of candidates) {
       const acResp = await fetch(`https://${host}/autocomplete?query=${encodeURIComponent(query)}`, { headers });
+      lastAcStatus = acResp.status;
       if (!acResp.ok) {
-        if (acResp.status === 429) return { estimate: null, status: "ERROR", rateLimited: true, source: "ZILLOW", propertyUrl: null, fetchedAt: new Date() };
+        if (acResp.status === 429) {
+          console.warn(`[zillow] autocomplete 429 for "${query}"`);
+          return { estimate: null, status: "RATE_LIMITED", rateLimited: true, source: "ZILLOW", propertyUrl: null, fetchedAt: new Date(), httpStatus: 429, stage: "autocomplete", errorMessage: "RapidAPI quota exceeded (429)" };
+        }
+        console.warn(`[zillow] autocomplete HTTP ${acResp.status} for "${query}"`);
         continue;
       }
       const acBody = await acResp.json() as Record<string, unknown>;
@@ -612,24 +623,31 @@ async function fetchZillowEstimate(
       if (candidate) { zpid = candidate; break; }
     }
 
-    if (!zpid) return { estimate: null, status: "NOT_FOUND", source: "ZILLOW", propertyUrl: null, fetchedAt: new Date() };
+    if (!zpid) {
+      return { estimate: null, status: "NOT_FOUND", source: "ZILLOW", propertyUrl: null, fetchedAt: new Date(), httpStatus: lastAcStatus, stage: "autocomplete", errorMessage: lastAcStatus && lastAcStatus !== 200 ? `Autocomplete HTTP ${lastAcStatus}` : "No ZPID in results" };
+    }
 
     const detailResp = await fetch(`https://${host}/byzpid?zpid=${zpid}`, { headers });
-    if (!detailResp.ok) return { estimate: null, status: "ERROR", source: "ZILLOW", propertyUrl: null, fetchedAt: new Date() };
+    if (!detailResp.ok) {
+      const isRl = detailResp.status === 429;
+      console.warn(`[zillow] byzpid HTTP ${detailResp.status} for zpid ${zpid}`);
+      return { estimate: null, status: isRl ? "RATE_LIMITED" : "ERROR", rateLimited: isRl, source: "ZILLOW", propertyUrl: null, fetchedAt: new Date(), httpStatus: detailResp.status, stage: "detail", errorMessage: `byzpid HTTP ${detailResp.status}` };
+    }
 
     const detail = await detailResp.json() as Record<string, unknown>;
     const MIN_HOME_VALUE = 50_000;
     const rawZestimate = numOrNull(detail["zestimate"]);
     const rawPrice = numOrNull(detail["Price"]);
     const zestimate = rawZestimate ?? (rawPrice != null && rawPrice >= MIN_HOME_VALUE ? rawPrice : null);
-    if (zestimate == null) return { estimate: null, status: "NOT_FOUND", source: "ZILLOW", propertyUrl: null, fetchedAt: new Date() };
+    if (zestimate == null) return { estimate: null, status: "NOT_FOUND", source: "ZILLOW", propertyUrl: null, fetchedAt: new Date(), stage: "detail", errorMessage: "No zestimate or Price in response" };
 
     const rawUrl = detail["PropertyZillowURL"];
     const propertyUrl = typeof rawUrl === "string" && rawUrl.startsWith("http") ? rawUrl : null;
     return { estimate: zestimate, status: "SUCCESS", source: "ZILLOW", propertyUrl, fetchedAt: new Date() };
   } catch (err) {
-    console.error("[foreclosures/zillow] error:", err);
-    return { estimate: null, status: "ERROR", source: "ZILLOW", propertyUrl: null, fetchedAt: new Date() };
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[foreclosures/zillow] fetch error:", err);
+    return { estimate: null, status: "ERROR", source: "ZILLOW", propertyUrl: null, fetchedAt: new Date(), stage: "fetch_error", errorMessage: msg.slice(0, 200) };
   }
 }
 
@@ -641,17 +659,23 @@ async function fetchRedfinEstimate(
 ): Promise<ValuationResult> {
   const apiKey = env.REDFIN_RAPIDAPI_KEY;
   const host = env.REDFIN_RAPIDAPI_HOST;
-  if (!apiKey || !host) return { estimate: null, status: "NOT_CONFIGURED", source: "REDFIN", propertyUrl: null, fetchedAt: new Date() };
+  if (!apiKey || !host) return { estimate: null, status: "NOT_CONFIGURED", source: "REDFIN", propertyUrl: null, fetchedAt: new Date(), stage: "config" };
 
   const headers = { "X-RapidAPI-Key": apiKey, "X-RapidAPI-Host": host, "Accept": "application/json" };
   const candidates = buildAddressCandidates(street, city, state, zip);
 
   try {
     let redfinUrl: string | null = null;
+    let lastAcStatus: number | undefined;
     for (const query of candidates) {
       const acResp = await fetch(`https://${host}/properties/auto-complete?query=${encodeURIComponent(query)}`, { headers });
+      lastAcStatus = acResp.status;
       if (!acResp.ok) {
-        if (acResp.status === 429) return { estimate: null, status: "ERROR", rateLimited: true, source: "REDFIN", propertyUrl: null, fetchedAt: new Date() };
+        if (acResp.status === 429) {
+          console.warn(`[redfin] autocomplete 429 for "${query}"`);
+          return { estimate: null, status: "RATE_LIMITED", rateLimited: true, source: "REDFIN", propertyUrl: null, fetchedAt: new Date(), httpStatus: 429, stage: "autocomplete", errorMessage: "RapidAPI quota exceeded (429)" };
+        }
+        console.warn(`[redfin] autocomplete HTTP ${acResp.status} for "${query}"`);
         continue;
       }
       const acBody = await acResp.json() as Record<string, unknown>;
@@ -660,15 +684,21 @@ async function fetchRedfinEstimate(
       const url = dataArr?.[0]?.rows?.[0]?.url;
       if (url) { redfinUrl = url; break; }
     }
-    if (!redfinUrl) return { estimate: null, status: "NOT_FOUND", source: "REDFIN", propertyUrl: null, fetchedAt: new Date() };
+    if (!redfinUrl) {
+      return { estimate: null, status: "NOT_FOUND", source: "REDFIN", propertyUrl: null, fetchedAt: new Date(), httpStatus: lastAcStatus, stage: "autocomplete", errorMessage: lastAcStatus && lastAcStatus !== 200 ? `Autocomplete HTTP ${lastAcStatus}` : "No URL in results" };
+    }
 
     await sleep(1200);
 
     const detailResp = await fetch(`https://${host}/property/detail?url=${encodeURIComponent(redfinUrl)}`, { headers });
-    if (!detailResp.ok) return { estimate: null, status: detailResp.status === 429 ? "ERROR" : "NOT_FOUND", source: "REDFIN", propertyUrl: null, fetchedAt: new Date() };
+    if (!detailResp.ok) {
+      const isRl = detailResp.status === 429;
+      console.warn(`[redfin] property/detail HTTP ${detailResp.status}`);
+      return { estimate: null, status: isRl ? "RATE_LIMITED" : "ERROR", rateLimited: isRl, source: "REDFIN", propertyUrl: null, fetchedAt: new Date(), httpStatus: detailResp.status, stage: "detail", errorMessage: `property/detail HTTP ${detailResp.status}` };
+    }
 
     const detailBody = await detailResp.json() as Record<string, unknown>;
-    if (!detailBody["status"]) return { estimate: null, status: "NOT_FOUND", source: "REDFIN", propertyUrl: null, fetchedAt: new Date() };
+    if (!detailBody["status"]) return { estimate: null, status: "NOT_FOUND", source: "REDFIN", propertyUrl: null, fetchedAt: new Date(), stage: "detail", errorMessage: "Response missing status field" };
 
     const data = detailBody["data"] as Record<string, unknown> | undefined;
     const aboveTheFold = data?.["aboveTheFold"] as Record<string, unknown> | undefined;
@@ -678,11 +708,12 @@ async function fetchRedfinEstimate(
     const estimate = priceInfo?.label === "Redfin Estimate" && typeof priceInfo.amount === "number" ? priceInfo.amount : null;
     const rawPropUrl = typeof addrInfo?.["url"] === "string" ? `https://www.redfin.com${addrInfo["url"] as string}` : null;
 
-    if (estimate === null) return { estimate: null, status: "NOT_FOUND", source: "REDFIN", propertyUrl: rawPropUrl, fetchedAt: new Date() };
+    if (estimate === null) return { estimate: null, status: "NOT_FOUND", source: "REDFIN", propertyUrl: rawPropUrl, fetchedAt: new Date(), stage: "detail", errorMessage: `priceInfo.label="${priceInfo?.label ?? "missing"}"` };
     return { estimate, status: "SUCCESS", source: "REDFIN", propertyUrl: rawPropUrl, fetchedAt: new Date() };
   } catch (err) {
-    console.error("[foreclosures/redfin] error:", err);
-    return { estimate: null, status: "ERROR", source: "REDFIN", propertyUrl: null, fetchedAt: new Date() };
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[foreclosures/redfin] fetch error:", err);
+    return { estimate: null, status: "ERROR", source: "REDFIN", propertyUrl: null, fetchedAt: new Date(), stage: "fetch_error", errorMessage: msg.slice(0, 200) };
   }
 }
 
@@ -1507,11 +1538,19 @@ interface DbRow {
 }
 
 /** Re-run Zillow + Redfin valuation for a single listing and update deal metrics. */
-export async function valuateListing(db: D1Database, sheriff: string, env: FcEnv): Promise<{ outcome: string }> {
+export interface ValuationDiagnostics {
+  outcome: string;
+  diagnostics: {
+    zillow: { configured: boolean; status: string; httpStatus?: number; stage?: string; errorMessage?: string };
+    redfin: { configured: boolean; status: string; httpStatus?: number; stage?: string; errorMessage?: string };
+  };
+}
+
+export async function valuateListing(db: D1Database, sheriff: string, env: FcEnv): Promise<ValuationDiagnostics> {
   const row = await db.prepare("SELECT * FROM foreclosures WHERE sheriff_number = ?")
     .bind(sheriff).first<DbRow>();
-  if (!row) return { outcome: "NOT_FOUND" };
-  if (!row.address || !row.city) return { outcome: "NO_ADDRESS" };
+  if (!row) return { outcome: "NOT_FOUND", diagnostics: { zillow: { configured: Boolean(env.ZILLOW_RAPIDAPI_KEY), status: "SKIPPED" }, redfin: { configured: Boolean(env.REDFIN_RAPIDAPI_KEY), status: "SKIPPED" } } };
+  if (!row.address || !row.city) return { outcome: "NO_ADDRESS", diagnostics: { zillow: { configured: Boolean(env.ZILLOW_RAPIDAPI_KEY), status: "SKIPPED" }, redfin: { configured: Boolean(env.REDFIN_RAPIDAPI_KEY), status: "SKIPPED" } } };
 
   const [zillow, redfin] = await Promise.all([
     fetchZillowEstimate(row.address, row.city, row.state ?? "NJ", row.zip_code ?? "", env),
@@ -1539,7 +1578,25 @@ export async function valuateListing(db: D1Database, sheriff: string, env: FcEnv
       mv, mvSrc, now, m.dealRating, m.dealScore, m.estimatedSpread, m.discountPercent, m.equityMultiple,
       now, sheriff).run();
 
-  return { outcome: `${zillow.status}/${redfin.status}` };
+  return {
+    outcome: `${zillow.status}/${redfin.status}`,
+    diagnostics: {
+      zillow: {
+        configured: Boolean(env.ZILLOW_RAPIDAPI_KEY),
+        status: zillow.status,
+        httpStatus: zillow.httpStatus,
+        stage: zillow.stage,
+        errorMessage: zillow.errorMessage,
+      },
+      redfin: {
+        configured: Boolean(env.REDFIN_RAPIDAPI_KEY),
+        status: redfin.status,
+        httpStatus: redfin.httpStatus,
+        stage: redfin.stage,
+        errorMessage: redfin.errorMessage,
+      },
+    },
+  };
 }
 
 /** Recompute classification, deal scoring and warnings from existing stored valuations. */

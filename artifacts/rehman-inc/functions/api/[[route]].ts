@@ -1211,14 +1211,9 @@ app.post("/foreclosures/listings/:sheriff/valuate", async (c) => {
   await ensureFcSchema(c.env);
   const sheriff = c.req.param("sheriff")?.toUpperCase();
   if (!sheriff) return c.json({ error: "sheriff_number required" }, 400);
-  const fcEnv = {
-    ZILLOW_RAPIDAPI_KEY: c.env.ZILLOW_RAPIDAPI_KEY,
-    ZILLOW_RAPIDAPI_HOST: c.env.ZILLOW_RAPIDAPI_HOST,
-    REDFIN_RAPIDAPI_KEY: c.env.REDFIN_RAPIDAPI_KEY,
-    REDFIN_RAPIDAPI_HOST: c.env.REDFIN_RAPIDAPI_HOST,
-  };
   try {
-    const result = await valuateListing(c.env.DB, sheriff, fcEnv);
+    // Pass c.env directly — proven to contain the RapidAPI keys (see /stats endpoint)
+    const result = await valuateListing(c.env.DB, sheriff, c.env);
     const row = await getForeclosureBySherifffNumber(c.env.DB, sheriff);
     return c.json({ ok: true, ...result, listing: row });
   } catch (err) {

@@ -1,0 +1,115 @@
+We have another exact clue from production.
+
+Manual valuation for:
+
+F-26000184
+935 OCEAN Avenue APT. 702
+Ocean City, NJ 08226
+
+returns:
+
+{
+  "ok": true,
+  "outcome": "ERROR/ERROR"
+}
+
+but the returned listing STILL has:
+
+zillowStatus: "NOT_CONFIGURED"
+redfinStatus: "NOT_CONFIGURED"
+
+I inspected the current logic.
+
+mergeValuation() preserves the existing NOT_CONFIGURED status when:
+
+newResult.rateLimited === true
+
+And both provider autocomplete functions set rateLimited=true when RapidAPI returns HTTP 429.
+
+Therefore this strongly suggests Zillow AND Redfin autocomplete are returning 429, but the current API hides that fact behind generic ERROR/ERROR.
+
+DO NOT redesign valuation.
+DO NOT change secrets.
+DO NOT change hosts.
+DO NOT push yet.
+
+Add SAFE provider diagnostics so we can see the exact upstream failure.
+
+For Zillow fetchZillowEstimate, capture:
+
+- autocomplete HTTP status
+- detail/byzpid HTTP status
+- whether rate limited
+- which stage failed: autocomplete or byzpid
+- a sanitized RapidAPI error message if present
+
+For Redfin fetchRedfinEstimate, capture:
+
+- autocomplete HTTP status
+- property detail HTTP status
+- whether rate limited
+- which stage failed
+
+NEVER return:
+- API keys
+- authorization headers
+- cookies
+- complete secret values
+
+Extend ValuationResult safely with fields like:
+
+httpStatus?: number
+stage?: string
+errorMessage?: string
+
+For 429, use an explicit status such as:
+
+RATE_LIMITED
+
+instead of generic ERROR where appropriate.
+
+Then modify:
+
+POST /api/foreclosures/listings/:sheriff/valuate
+
+to temporarily return safe diagnostics such as:
+
+{
+  "ok": true,
+  "outcome": "RATE_LIMITED/RATE_LIMITED",
+  "diagnostics": {
+    "zillow": {
+      "configured": true,
+      "status": "RATE_LIMITED",
+      "httpStatus": 429,
+      "stage": "autocomplete"
+    },
+    "redfin": {
+      "configured": true,
+      "status": "RATE_LIMITED",
+      "httpStatus": 429,
+      "stage": "autocomplete"
+    }
+  }
+}
+
+Do not include secret values.
+
+Also keep existing successful valuation data protected when rate limited.
+
+IMPORTANT:
+Do not try to fix the presumed 429 yet.
+First expose the real HTTP statuses so we know whether this is:
+
+- 429 quota/rate limit
+- 401 bad key
+- 403 subscription issue
+- 404 wrong endpoint
+- 5xx provider issue
+- network/fetch error
+
+Run TypeScript checks and production build.
+
+Tell me what files changed.
+
+DO NOT push to GitHub yet.
