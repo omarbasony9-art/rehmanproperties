@@ -1,0 +1,175 @@
+Update the existing **Rehman INC Properties page hero/header**.
+
+Do NOT rebuild the website.
+Do NOT change the backend.
+Do NOT change the admin system.
+This is a frontend layout change only.
+
+The current Properties page hero looks wrong because the property image is displayed as a small separate rectangle on the right side of the page.
+
+I want the Properties page hero to look like the existing **How It Works** hero.
+
+# CURRENT PROBLEM
+
+The Properties page currently has:
+
+* Light/off-white background
+* Large text on the left
+* Small property image floating on the right
+* Too much empty space
+* The image feels disconnected from the hero
+
+Remove that layout.
+
+# NEW PROPERTIES HERO
+
+Use a full-width background property image similar to the How It Works page.
+
+The image should:
+
+* Fill the entire hero background
+* Stretch edge-to-edge across the viewport
+* Use `background-size: cover`
+* Use `background-position: center`
+* Never appear as a small floating card
+* Never have a visible border around the image
+* Never have rounded card corners
+* Scale properly on desktop, tablet, and mobile
+
+Add a dark overlay on top of the image so text is easy to read.
+
+Use approximately:
+
+`rgba(0, 0, 0, 0.55)`
+
+Adjust slightly if necessary for readability.
+
+# CONTENT POSITION
+
+Place the Properties hero content on the left, similar to the How It Works page.
+
+Use:
+
+Small green eyebrow:
+
+**OUR PORTFOLIO**
+
+Large white headline:
+
+**Real Estate We Acquire and Manage.**
+
+Supporting text:
+
+**Explore the types of properties that fit the Rehman INC investment strategy.**
+
+Keep the text container approximately:
+
+`max-width: 650px`
+
+Position it with professional left padding.
+
+Desktop:
+
+approximately 5–6vw from the left.
+
+# HERO HEIGHT
+
+Make the Properties hero approximately the same visual height as the How It Works hero.
+
+Desktop:
+
+Around `600px–680px`
+
+Tablet:
+
+Around `520px–600px`
+
+Mobile:
+
+Around `480px–560px`
+
+Do not make it unnecessarily tall.
+
+# NAVIGATION
+
+The navigation should sit over the hero just like it does on the How It Works page.
+
+Use the dark/transparent navigation treatment appropriate for a background image.
+
+Make sure:
+
+* Logo is visible
+* Navigation links are readable
+* Active Properties link still has the green underline/accent
+* Get My Cash Offer button remains visible
+
+# CONSISTENCY
+
+I want these hero pages to feel like they belong to the same website.
+
+The Properties page should visually match the How It Works hero style:
+
+* Full-width background image
+* Dark overlay
+* White headline
+* Green eyebrow
+* Supporting text
+* Content aligned left
+* No floating image cards
+
+Do NOT copy the exact background image from How It Works if the Properties page already has an appropriate property image.
+
+Use the current Properties image as the full hero background if it is suitable.
+
+# REMOVE OLD LAYOUT
+
+Completely remove the current:
+
+* Two-column light hero
+* Small image on right
+* Image card styling
+* White/off-white hero background
+* Excess empty space
+
+Do not leave remnants of the old styling.
+
+# MOBILE
+
+On mobile:
+
+* Keep image full-width
+* Keep overlay dark enough to read text
+* Reduce headline size appropriately
+* Keep text left-aligned
+* Ensure no horizontal overflow
+* Keep the navbar/mobile menu usable
+
+# IMPORTANT
+
+Do NOT change:
+
+* Properties page content below the hero
+* Property database
+* Admin dashboard
+* Inquiry forms
+* Email system
+* Cloudflare setup
+* Resend setup
+
+Only fix the Properties page hero/layout.
+
+# FINAL CHECK
+
+After making the change:
+
+1. Compare the Properties hero to the How It Works hero.
+2. Confirm the image is full-background.
+3. Confirm there is no floating image card.
+4. Confirm text is readable.
+5. Confirm desktop looks correct.
+6. Confirm mobile looks correct.
+7. Confirm navigation still works.
+8. Run the production build.
+9. Fix any errors.
+
+Make the change now.

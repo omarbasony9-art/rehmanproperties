@@ -23,6 +23,17 @@ import TermsPage from '@/pages/terms';
 import AdminLogin from '@/pages/admin/login';
 import AdminDashboard from '@/pages/admin/dashboard';
 import AdminInquiryDetail from '@/pages/admin/inquiry';
+import AdminInquiriesList from '@/pages/admin/inquiries-list';
+import AdminProperties from '@/pages/admin/properties';
+import AdminFaqs from '@/pages/admin/faqs';
+import AdminContactInfo from '@/pages/admin/contact-info';
+import AdminWebsiteContent from '@/pages/admin/website-content';
+import AdminSettings from '@/pages/admin/settings';
+import AdminAdminSettings from '@/pages/admin/admin-settings';
+import AdminSocialMedia from '@/pages/admin/social-media';
+import AdminSEO from '@/pages/admin/seo';
+import AdminImages from '@/pages/admin/images';
+import AdminAudit from '@/pages/admin/audit';
 import { ScrollToTop } from '@/components/scroll-to-top';
 
 const queryClient = new QueryClient();
@@ -32,6 +43,7 @@ function Router() {
     <RoutedErrorBoundary>
       <ScrollToTop />
       <Switch>
+        {/* Public pages */}
         <Route path="/" component={HomePage} />
         <Route path="/how-it-works" component={HowItWorksPage} />
         <Route path="/sell-your-house" component={SellYourHousePage} />
@@ -41,9 +53,21 @@ function Router() {
         <Route path="/contact" component={ContactPage} />
         <Route path="/privacy" component={PrivacyPage} />
         <Route path="/terms" component={TermsPage} />
+        {/* Admin pages */}
         <Route path="/admin" component={AdminLogin} />
         <Route path="/admin/dashboard" component={AdminDashboard} />
+        <Route path="/admin/inquiries-list" component={AdminInquiriesList} />
         <Route path="/admin/inquiries/:id" component={AdminInquiryDetail} />
+        <Route path="/admin/properties" component={AdminProperties} />
+        <Route path="/admin/faqs" component={AdminFaqs} />
+        <Route path="/admin/contact-info" component={AdminContactInfo} />
+        <Route path="/admin/website-content" component={AdminWebsiteContent} />
+        <Route path="/admin/settings" component={AdminSettings} />
+        <Route path="/admin/admin-settings" component={AdminAdminSettings} />
+        <Route path="/admin/social-media" component={AdminSocialMedia} />
+        <Route path="/admin/seo" component={AdminSEO} />
+        <Route path="/admin/images" component={AdminImages} />
+        <Route path="/admin/audit" component={AdminAudit} />
         <Route component={NotFound} />
       </Switch>
     </RoutedErrorBoundary>

@@ -8,7 +8,7 @@ import {
   useGetAdminMe,
   InquiryDetailStatus
 } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useQuery, useMutation } from "@tanstack/react-query";
 import { 
   Loader2, 
   ArrowLeft,
@@ -22,7 +22,7 @@ import {
   Wrench,
   CheckCircle2,
   Info,
-  Save,
+  Send,
   MessageSquare
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -30,6 +30,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useSEO } from "@/hooks/use-seo";
+import { adminFetch } from "@/lib/admin-api";
 
 const statusColors: Record<string, string> = {
   new: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 border-blue-200 dark:border-blue-800",
@@ -69,13 +70,25 @@ export default function AdminInquiryDetail() {
   });
 
   const updateInquiry = useUpdateAdminInquiry();
-  const [notes, setNotes] = useState("");
+  const [newNote, setNewNote] = useState("");
   const initializedForId = useRef<number | null>(null);
+
+  // Timestamped notes
+  const { data: notesList = [], refetch: refetchNotes } = useQuery<{ id: number; note: string; createdAt: string }[]>({
+    queryKey: ["inquiry-notes", id],
+    queryFn: () => adminFetch(`/admin/inquiries/${id}/notes`),
+    enabled: !!id && !!me?.authenticated,
+  });
+
+  const addNote = useMutation({
+    mutationFn: (note: string) => adminFetch(`/admin/inquiries/${id}/notes`, { method: "POST", body: JSON.stringify({ note }) }),
+    onSuccess: () => { setNewNote(""); refetchNotes(); toast({ title: "Note added" }); },
+    onError: () => toast({ title: "Failed to add note", variant: "destructive" }),
+  });
 
   useEffect(() => {
     if (inquiry && initializedForId.current !== id) {
       initializedForId.current = id;
-      setNotes(inquiry.notes || "");
     }
   }, [inquiry, id]);
 
@@ -94,19 +107,10 @@ export default function AdminInquiryDetail() {
     });
   };
 
-  const handleSaveNotes = () => {
-    updateInquiry.mutate({
-      id,
-      data: { notes }
-    }, {
-      onSuccess: (updatedData) => {
-        toast({ title: "Notes saved successfully" });
-        queryClient.setQueryData(getGetAdminInquiryQueryKey(id), updatedData);
-      },
-      onError: () => {
-        toast({ title: "Failed to save notes", variant: "destructive" });
-      }
-    });
+  const handleAddNote = () => {
+    const trimmed = newNote.trim();
+    if (!trimmed) return;
+    addNote.mutate(trimmed);
   };
 
   if (meLoading || (isLoading && !!id)) {
@@ -337,25 +341,43 @@ export default function AdminInquiryDetail() {
               </div>
             </div>
 
-            {/* INTERNAL NOTES */}
-            <div className="bg-card border border-border rounded-xl shadow-sm overflow-hidden flex flex-col h-[400px]">
+            {/* INTERNAL NOTES — timestamped */}
+            <div className="bg-card border border-border rounded-xl shadow-sm overflow-hidden flex flex-col">
               <div className="p-4 border-b border-border bg-muted/20 font-medium flex items-center gap-2">
-                <Info className="w-4 h-4 text-primary" /> Internal Notes
+                <MessageSquare className="w-4 h-4 text-primary" /> Internal Notes
               </div>
-              <div className="p-4 flex-1 flex flex-col">
-                <Textarea 
-                  className="flex-1 resize-none bg-muted/20 border-border focus-visible:ring-primary/50 text-base p-4"
-                  placeholder="Add private notes about this property, seller conversations, or evaluation details..."
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
+              {/* Note history */}
+              <div className="flex-1 max-h-64 overflow-y-auto p-4 space-y-3">
+                {notesList.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-6">No notes yet.</p>
+                ) : (
+                  [...notesList].reverse().map(n => (
+                    <div key={n.id} className="bg-muted/30 rounded-lg p-3 border border-border/50">
+                      <p className="text-sm text-foreground whitespace-pre-wrap">{n.note}</p>
+                      <p className="text-xs text-muted-foreground mt-1.5">
+                        {new Date(n.createdAt).toLocaleString()}
+                      </p>
+                    </div>
+                  ))
+                )}
+              </div>
+              {/* Add note input */}
+              <div className="p-4 border-t border-border space-y-2">
+                <Textarea
+                  className="resize-none bg-muted/20 border-border focus-visible:ring-primary/50 text-sm"
+                  rows={3}
+                  placeholder="Add a note about this inquiry…"
+                  value={newNote}
+                  onChange={e => setNewNote(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter" && e.metaKey) handleAddNote(); }}
                 />
-                <Button 
-                  className="w-full mt-4 bg-primary text-primary-foreground" 
-                  onClick={handleSaveNotes}
-                  disabled={notes === (inquiry.notes || "") || updateInquiry.isPending}
+                <Button
+                  className="w-full bg-primary text-primary-foreground"
+                  onClick={handleAddNote}
+                  disabled={!newNote.trim() || addNote.isPending}
                 >
-                  {updateInquiry.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
-                  Save Notes
+                  {addNote.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Send className="w-4 h-4 mr-2" />}
+                  Add Note
                 </Button>
               </div>
             </div>

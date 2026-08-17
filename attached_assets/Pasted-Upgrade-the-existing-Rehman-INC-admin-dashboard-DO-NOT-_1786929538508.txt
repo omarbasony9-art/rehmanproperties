@@ -1,0 +1,636 @@
+Upgrade the existing **Rehman INC** admin dashboard.
+
+DO NOT rebuild the website.
+DO NOT change the current low-cost architecture.
+DO NOT break the inquiry/email system.
+
+I want `/admin` to become the complete control center for the Rehman INC website.
+
+# ADMIN LOGIN
+
+For now, set the admin access password to:
+
+`1964`
+
+IMPORTANT SECURITY REQUIREMENTS:
+
+* Do NOT hardcode `1964` into frontend JavaScript.
+* Store/check the password server-side only.
+* Prefer an environment variable named:
+
+`ADMIN_PASSWORD`
+
+with the value:
+
+`1964`
+
+* Use the existing `SESSION_SECRET`.
+* After successful login, create a secure server-side/session-cookie based admin session.
+* Use HttpOnly cookies.
+* Use Secure cookies in production.
+* Use SameSite protection.
+* Add login rate limiting.
+* Temporarily lock out repeated failed login attempts.
+* Never expose the admin password through API responses.
+* Never include the password in frontend source code.
+* Add an admin option to change the password later without modifying the website code.
+
+Do NOT use Clerk, Auth0, Firebase Auth, or another paid authentication service.
+
+Keep this inexpensive.
+
+---
+
+# ADMIN DASHBOARD
+
+After logging into:
+
+`/admin`
+
+I want a professional dashboard that gives me control over the entire Rehman INC website.
+
+Create a sidebar/navigation with:
+
+* Dashboard
+* Inquiries
+* Website Content
+* Properties
+* FAQs
+* Contact Information
+* Images
+* SEO
+* Social Media
+* Website Settings
+* Admin Settings
+* Logout
+
+Make the admin dashboard desktop and mobile friendly.
+
+---
+
+# DASHBOARD HOME
+
+Show useful statistics:
+
+* Total Inquiries
+* New Inquiries
+* Contacted
+* Appointments
+* Offers Made
+* Under Contract
+* Closed
+* Lost
+
+Also show:
+
+**Recent Inquiries**
+
+with:
+
+* Inquiry number
+* Name
+* Property address
+* Phone
+* Email
+* Date
+* Status
+
+Clicking an inquiry should open the complete inquiry.
+
+---
+
+# ALL INQUIRIES MUST BE SAVED
+
+This is extremely important.
+
+EVERY inquiry submitted anywhere on the website must be permanently saved in the existing database.
+
+This includes:
+
+* Get My Cash Offer
+* Sell Your House form
+* Property inquiry form
+* Contact form
+* Any future lead form
+
+Do NOT rely only on email.
+
+The flow must be:
+
+1. Visitor submits form.
+2. Server validates information.
+3. Inquiry is saved to database.
+4. Unique inquiry number is created.
+5. Email notification is sent to:
+
+`Aliproperties91@gmail.com`
+
+6. Inquiry appears immediately in the admin dashboard.
+
+If Resend/email fails:
+
+THE INQUIRY MUST STILL REMAIN SAVED.
+
+Do not lose leads because an email fails.
+
+---
+
+# INQUIRY MANAGEMENT
+
+Create a full inquiry management system.
+
+Each inquiry should display:
+
+## Seller
+
+* Full name
+* Email
+* Phone
+* Preferred contact method
+
+## Property
+
+* Property address
+* City
+* State
+* ZIP
+* Property type
+* Bedrooms
+* Bathrooms
+* Square footage
+* Occupancy
+* Condition
+* Repairs needed
+
+## Selling Information
+
+* Reason for selling
+* Selling timeline
+
+## Inquiry Information
+
+* Inquiry number
+* Date submitted
+* Time submitted
+* Source
+* UTM source
+* UTM medium
+* UTM campaign
+
+## Photos
+
+Show all uploaded property photos.
+
+Allow me to click a photo to see the larger version.
+
+---
+
+# INQUIRY STATUS
+
+Allow me to change each inquiry status:
+
+* New
+* Contacted
+* Appointment
+* Offer Made
+* Under Contract
+* Closed
+* Lost
+
+Make status changes immediately save to the database.
+
+---
+
+# ADMIN NOTES
+
+Allow me to add private notes to every inquiry.
+
+Examples:
+
+* Called seller
+* Seller wants $250,000
+* Follow up Monday
+* Property needs roof
+* Appointment scheduled
+
+Notes must NEVER appear publicly on the website.
+
+Include timestamps on notes.
+
+---
+
+# SEARCH AND FILTER
+
+Allow me to search inquiries by:
+
+* Name
+* Phone
+* Email
+* Property address
+* Inquiry number
+
+Allow filters by:
+
+* Status
+* Date
+* Property type
+* State
+* Selling timeline
+
+Allow sorting:
+
+* Newest
+* Oldest
+* Name
+* Status
+
+---
+
+# EXPORT
+
+Add:
+
+**Export Inquiries**
+
+Allow exporting inquiry data as CSV.
+
+Do not expose private photo storage credentials in the export.
+
+---
+
+# WEBSITE CONTENT CONTROL
+
+I want to be able to change the website through the admin dashboard without needing Replit for normal content updates.
+
+Create a **Website Content** section.
+
+Allow me to edit the visible text on:
+
+* Home
+* Sell Your House
+* How It Works
+* Why Us
+* Properties
+* FAQ
+* Contact
+* Footer
+
+I should be able to edit:
+
+* Headlines
+* Subheadlines
+* Paragraphs
+* CTA text
+* Button labels
+* Section titles
+* Section descriptions
+
+Create proper structured editable fields.
+
+DO NOT create a dangerous arbitrary code editor.
+
+I want control over website content, not the ability to accidentally execute malicious JavaScript from the admin dashboard.
+
+---
+
+# HOMEPAGE CONTROL
+
+Allow me to edit:
+
+* Hero headline
+* Hero subheadline
+* Hero supporting text
+* CTA text
+* How It Works content
+* Why Rehman INC content
+* Situations section
+* Final CTA
+
+Allow me to enable/disable appropriate homepage sections.
+
+---
+
+# PAGE CONTROL
+
+For every public page allow me to edit:
+
+* Page title
+* Hero eyebrow
+* Hero headline
+* Hero description
+* CTA text
+* Main content
+* Section visibility
+
+Changes should save to the database and automatically appear on the public website.
+
+---
+
+# PROPERTIES ADMIN
+
+Create a Properties manager.
+
+Allow me to:
+
+* Add property
+* Edit property
+* Remove property
+* Upload property photos
+* Reorder properties
+* Publish/unpublish property
+
+Fields:
+
+* Property title
+* Address or city/state display
+* Property type
+* Description
+* Images
+* Status
+* Featured
+
+Do NOT automatically create fake properties.
+
+Only show properties I add.
+
+---
+
+# FAQ ADMIN
+
+Allow me to:
+
+* Add FAQ
+* Edit FAQ
+* Delete FAQ
+* Reorder FAQs
+* Publish/unpublish FAQ
+
+Changes should immediately update the public FAQ page.
+
+---
+
+# CONTACT INFORMATION
+
+Allow me to edit:
+
+* Contact name
+* Phone
+* Email
+* Instagram
+* Other social links
+
+Current values should be:
+
+Name:
+`Ali Rehman`
+
+Phone:
+`609-582-1061`
+
+Email:
+`Aliproperties91@gmail.com`
+
+Instagram:
+`https://www.instagram.com/ali_monopoly/?utm_source=ig_web_button_share_sheet`
+
+Updating these in admin should update them everywhere on the website.
+
+---
+
+# IMAGES
+
+Create an Images / Media section.
+
+Allow admin to:
+
+* Upload website images
+* Replace images
+* Remove unused images
+* Select images for page heroes
+* Select images for property listings
+
+Use the existing Cloudflare R2 infrastructure if already configured.
+
+Do not add another paid image-storage service.
+
+Validate image files securely.
+
+---
+
+# SEO CONTROL
+
+Allow me to edit SEO settings for each page:
+
+* SEO title
+* Meta description
+* Open Graph title
+* Open Graph description
+* Open Graph image
+
+Do not make this unnecessarily complicated.
+
+---
+
+# SOCIAL MEDIA
+
+Allow me to edit social media links.
+
+Currently Instagram should be:
+
+`https://www.instagram.com/ali_monopoly/?utm_source=ig_web_button_share_sheet`
+
+---
+
+# WEBSITE SETTINGS
+
+Create a Website Settings section containing:
+
+* Company name
+* Contact information
+* Main CTA text
+* Notification email
+* Social links
+* Basic website settings
+
+Company:
+
+`Rehman INC`
+
+Inquiry notification email:
+
+`Aliproperties91@gmail.com`
+
+IMPORTANT:
+
+Do NOT display or allow viewing of:
+
+* RESEND_API_KEY
+* SESSION_SECRET
+* storage credentials
+* database credentials
+* other sensitive secrets
+
+Sensitive infrastructure secrets should remain in Replit/Cloudflare environment variables.
+
+---
+
+# ADMIN SETTINGS
+
+Create:
+
+* Change admin password
+* Logout
+* Session management
+
+When changing password:
+
+* Require current password
+* Require new password
+* Save securely server-side
+* Do not expose the password
+
+Initial password remains:
+
+`1964`
+
+---
+
+# AUDIT LOG
+
+Create a lightweight admin activity log.
+
+Record important actions such as:
+
+* Inquiry status changed
+* Inquiry note added
+* Website text changed
+* Property added
+* Property removed
+* FAQ changed
+* Contact information changed
+* Admin password changed
+
+Include:
+
+* Action
+* Date
+* Time
+
+Keep this inexpensive and store it in the existing database.
+
+---
+
+# SAVE CHANGES PROPERLY
+
+Do NOT make admin edits frontend-only.
+
+When I change content and press Save:
+
+1. Send update to authenticated backend API.
+2. Validate the request.
+3. Save it to the database.
+4. Public website reads the updated content.
+5. Show a clear Save Successful message.
+
+Refreshing the browser must NOT erase changes.
+
+---
+
+# DO NOT BREAK THE EXISTING EMAIL SYSTEM
+
+Keep:
+
+`RESEND_FROM_EMAIL=Rehman INC <inquiries@therehmanproperties.com>`
+
+Keep:
+
+`INQUIRY_NOTIFICATION_EMAIL=Aliproperties91@gmail.com`
+
+Keep using the existing:
+
+`RESEND_API_KEY`
+
+Every inquiry must continue being emailed to:
+
+`Aliproperties91@gmail.com`
+
+AND saved in admin.
+
+---
+
+# KEEP IT CHEAP
+
+Continue using the existing architecture wherever possible:
+
+* React
+* Vite
+* TypeScript
+* Cloudflare
+* D1
+* R2
+* Resend
+* GitHub
+
+Do NOT add:
+
+* OpenAI
+* AI APIs
+* Clerk
+* Firebase
+* Supabase
+* Auth0
+* PostgreSQL
+* paid CMS systems
+* unnecessary SaaS subscriptions
+
+Do not replace working infrastructure just to make implementation easier.
+
+---
+
+# ADMIN DESIGN
+
+Make the admin look like a real professional business dashboard.
+
+Use:
+
+* Clean sidebar
+* Tables
+* Search
+* Filters
+* Status badges
+* Clear forms
+* Image previews
+* Mobile responsive layout
+
+Do not overdesign it.
+
+The admin should prioritize speed and usability.
+
+---
+
+# FINAL TEST
+
+Before saying this is finished:
+
+1. Run TypeScript typecheck.
+2. Run production build.
+3. Test admin login with password `1964`.
+4. Confirm incorrect passwords fail.
+5. Confirm `/admin` cannot be accessed without authentication.
+6. Submit a test property inquiry.
+7. Confirm it saves to the database.
+8. Confirm it appears in Admin → Inquiries.
+9. Confirm the email is sent to `Aliproperties91@gmail.com`.
+10. Test inquiry status changes.
+11. Test admin notes.
+12. Test website content editing.
+13. Refresh and confirm edits remain saved.
+14. Test property manager.
+15. Test FAQ manager.
+16. Test contact information editing.
+17. Confirm uploaded property photos appear in admin.
+18. Confirm no secrets are exposed in frontend source or API responses.
+19. Confirm logout works.
+20. Confirm no new paid services were added.
+
+Do the implementation now. Do not just explain what you would build.

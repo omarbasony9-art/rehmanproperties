@@ -1,11 +1,14 @@
 import { Router, type IRouter } from "express";
-import { db, inquiriesTable, propertyPhotosTable } from "@workspace/db";
+import { db, inquiriesTable, propertyPhotosTable, adminConfigTable } from "@workspace/db";
 import { eq, count, desc, asc, and, sql } from "drizzle-orm";
 import {
   createSession,
   validateSession,
   destroySession,
   checkAdminPassword,
+  checkLoginRateLimit,
+  recordFailedLogin,
+  clearLoginAttempts,
 } from "../lib/auth";
 
 const router: IRouter = Router();
@@ -21,6 +24,15 @@ function isAuthenticated(req: Parameters<Parameters<IRouter["get"]>[1]>[0]): boo
 
 // POST /admin/login
 router.post("/admin/login", async (req, res): Promise<void> => {
+  const ip = req.ip ?? "unknown";
+
+  // Rate limit check
+  const rateCheck = checkLoginRateLimit(ip);
+  if (!rateCheck.allowed) {
+    res.status(429).json({ error: `Too many failed attempts. Try again in ${rateCheck.lockedFor} seconds.` });
+    return;
+  }
+
   const { password } = req.body ?? {};
 
   if (!password || typeof password !== "string") {
@@ -28,13 +40,18 @@ router.post("/admin/login", async (req, res): Promise<void> => {
     return;
   }
 
-  if (!checkAdminPassword(password)) {
-    // Small delay to deter brute-force
+  // Load DB password hash override if it exists
+  const [hashRow] = await db.select().from(adminConfigTable).where(eq(adminConfigTable.key, "password_hash"));
+  const storedHash = hashRow?.value ?? null;
+
+  if (!checkAdminPassword(password, storedHash)) {
+    recordFailedLogin(ip);
     await new Promise<void>((r) => setTimeout(r, 500));
     res.status(401).json({ error: "Invalid credentials." });
     return;
   }
 
+  clearLoginAttempts(ip);
   const token = createSession();
 
   res.cookie(COOKIE_NAME, token, {
@@ -194,6 +211,61 @@ router.get("/admin/inquiries", async (req, res): Promise<void> => {
     page,
     limit,
   });
+});
+
+// GET /admin/inquiries/export.csv — must be before /:id to avoid route conflict
+router.get("/admin/inquiries/export.csv", async (req, res): Promise<void> => {
+  if (!isAuthenticated(req)) { res.status(401).json({ error: "Not authenticated." }); return; }
+
+  const rows = await db.select({
+    inquiryNumber: inquiriesTable.inquiryNumber,
+    createdAt: inquiriesTable.createdAt,
+    status: inquiriesTable.status,
+    fullName: inquiriesTable.fullName,
+    email: inquiriesTable.email,
+    phone: inquiriesTable.phone,
+    preferredContact: inquiriesTable.preferredContact,
+    address: inquiriesTable.address,
+    city: inquiriesTable.city,
+    state: inquiriesTable.state,
+    zip: inquiriesTable.zip,
+    propertyType: inquiriesTable.propertyType,
+    bedrooms: inquiriesTable.bedrooms,
+    bathrooms: inquiriesTable.bathrooms,
+    squareFootage: inquiriesTable.squareFootage,
+    occupied: inquiriesTable.occupied,
+    propertyCondition: inquiriesTable.propertyCondition,
+    repairs: inquiriesTable.repairs,
+    sellingReason: inquiriesTable.sellingReason,
+    sellingTimeline: inquiriesTable.sellingTimeline,
+    source: inquiriesTable.source,
+  }).from(inquiriesTable).orderBy(desc(inquiriesTable.createdAt));
+
+  function csvEscape(v: unknown): string {
+    if (v === null || v === undefined) return "";
+    const s = String(v instanceof Date ? v.toISOString() : v).replace(/"/g, '""');
+    return `"${s}"`;
+  }
+
+  const headers = [
+    "Inquiry Number","Date","Status","Full Name","Email","Phone","Preferred Contact",
+    "Address","City","State","ZIP","Property Type","Bedrooms","Bathrooms",
+    "Sq Footage","Occupied","Condition","Repairs","Selling Reason","Selling Timeline","Source",
+  ];
+
+  const lines = [
+    headers.map(csvEscape).join(","),
+    ...rows.map(r => [
+      r.inquiryNumber, r.createdAt, r.status, r.fullName, r.email, r.phone, r.preferredContact,
+      r.address, r.city, r.state, r.zip, r.propertyType, r.bedrooms, r.bathrooms,
+      r.squareFootage, r.occupied, r.propertyCondition, r.repairs,
+      r.sellingReason, r.sellingTimeline, r.source,
+    ].map(csvEscape).join(",")),
+  ];
+
+  res.setHeader("Content-Type", "text/csv");
+  res.setHeader("Content-Disposition", `attachment; filename="inquiries-${new Date().toISOString().slice(0, 10)}.csv"`);
+  res.send(lines.join("\r\n"));
 });
 
 // GET /admin/inquiries/:id
