@@ -378,4 +378,27 @@ router.patch("/admin/inquiries/:id", async (req, res): Promise<void> => {
   });
 });
 
+// POST /admin/foreclosure-refresh  — server-side proxy so REFRESH_SECRET never reaches the browser
+router.post("/admin/foreclosure-refresh", async (req, res): Promise<void> => {
+  if (!isAuthenticated(req)) {
+    res.status(401).json({ error: "Not authenticated." });
+    return;
+  }
+  const refreshSecret = process.env.REFRESH_SECRET;
+  if (!refreshSecret) {
+    res.status(503).json({ error: "REFRESH_SECRET not configured on the server." });
+    return;
+  }
+  try {
+    const upstream = await fetch("http://localhost:25309/api/refresh", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${refreshSecret}` },
+    });
+    const data = await upstream.json();
+    res.status(upstream.status).json(data);
+  } catch {
+    res.status(502).json({ error: "Could not reach the Foreclosure Tracker service." });
+  }
+});
+
 export default router;

@@ -34,6 +34,8 @@ import AdminSocialMedia from '@/pages/admin/social-media';
 import AdminSEO from '@/pages/admin/seo';
 import AdminImages from '@/pages/admin/images';
 import AdminAudit from '@/pages/admin/audit';
+import AdminForeclosures from '@/pages/admin/foreclosures';
+import AdminForeclosureDeals from '@/pages/admin/foreclosure-deals';
 import { ScrollToTop } from '@/components/scroll-to-top';
 
 const queryClient = new QueryClient({
@@ -80,6 +82,8 @@ function Router() {
         <Route path="/admin/seo" component={AdminSEO} />
         <Route path="/admin/images" component={AdminImages} />
         <Route path="/admin/audit" component={AdminAudit} />
+        <Route path="/admin/foreclosures" component={AdminForeclosures} />
+        <Route path="/admin/foreclosure-deals" component={AdminForeclosureDeals} />
         <Route component={NotFound} />
       </Switch>
     </RoutedErrorBoundary>

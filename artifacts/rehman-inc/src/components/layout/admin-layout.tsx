@@ -4,7 +4,7 @@ import {
   LogOut, LayoutDashboard, Building2, Loader2,
   FileText, HelpCircle, Phone, Image, Search, Share2,
   SlidersHorizontal, ShieldCheck, ClipboardList,
-  History, Menu, House,
+  History, Menu, House, List, Flame,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -23,6 +23,11 @@ const NAV = [
   { href: "/admin/settings",        label: "Website Settings",    icon: SlidersHorizontal },
   { href: "/admin/admin-settings",  label: "Admin Settings",      icon: ShieldCheck },
   { href: "/admin/audit",           label: "Audit Log",           icon: History },
+];
+
+const FORECLOSURE_NAV = [
+  { href: "/admin/foreclosures",       label: "All Listings", icon: List },
+  { href: "/admin/foreclosure-deals",  label: "Hot Deals",    icon: Flame },
 ];
 
 export function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -84,6 +89,28 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
           </Link>
         ))}
 
+        {/* Foreclosure Tracker section */}
+        <div className="pt-3 pb-1">
+          <p className="px-3 text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">
+            Foreclosure Tracker
+          </p>
+        </div>
+        {FORECLOSURE_NAV.map(({ href, label, icon: Icon }) => (
+          <Link
+            key={href}
+            href={href}
+            onClick={() => setMobileOpen(false)}
+            className={cn(
+              "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-colors",
+              location === href || location.startsWith(href)
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+            )}
+          >
+            <Icon className="w-4 h-4 shrink-0" />
+            {label}
+          </Link>
+        ))}
       </nav>
 
       <div className="p-3 border-t border-border shrink-0 space-y-1">
