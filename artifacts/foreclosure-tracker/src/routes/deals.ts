@@ -44,7 +44,7 @@ dealsRouter.get("/", async (req, res) => {
     const rows = await query(
       `SELECT * FROM foreclosures
        WHERE ${conditions.join(" AND ")}
-       ORDER BY ${RATING_ORDER}, deal_score DESC NULLS LAST, discount_percent DESC NULLS LAST`,
+       ORDER BY upset_amount ASC NULLS LAST`,
       params,
     );
 
@@ -63,7 +63,7 @@ dealsRouter.get("/new", async (_req, res) => {
        WHERE is_removed = FALSE
          AND deal_rating IN ('EXTREME','MAJOR','STRONG')
          AND first_seen > NOW() - INTERVAL '48 hours'
-       ORDER BY ${RATING_ORDER}, deal_score DESC NULLS LAST`,
+       ORDER BY upset_amount ASC NULLS LAST`,
     );
     const items = rows.map(formatDeal);
     res.json({ items, count: items.length });
