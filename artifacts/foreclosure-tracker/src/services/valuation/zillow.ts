@@ -44,9 +44,17 @@ export async function fetchZillowEstimate(
   //   1. Full address as-is
   //   2. Strip parenthetical qualifiers: "Absecon (Galloway Twp.)" → "Absecon"
   //   3. Strip trailing NJ municipality suffixes: "Hamilton Township" → "Hamilton"
+  //      (but preserve cities whose real name ends in one of these words — e.g.
+  //       "Ocean City", "Sea Isle City", "Cape May City", "Cape May Court House")
   //   4. Street + state + zip only (no city)
+  const PRESERVE_CITY_NAMES = new Set([
+    "ocean city", "sea isle city", "cape may city", "cape may court house",
+    "jersey city", "atlantic city", "new york city",
+  ]);
   const noParens    = city.replace(/\s*\([^)]*\)\s*/g, "").trim();
-  const strippedCity = noParens.replace(/\s+(Township|Twp|Borough|Boro|City|Village|Town)$/i, "").trim();
+  const strippedCity = PRESERVE_CITY_NAMES.has(noParens.toLowerCase())
+    ? noParens   // keep as-is — stripping would produce a wrong/meaningless name
+    : noParens.replace(/\s+(Township|Twp|Borough|Boro|City|Village|Town)$/i, "").trim();
   const seen = new Set<string>();
   const addressCandidates: string[] = [];
   for (const c of [city, noParens, strippedCity]) {

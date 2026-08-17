@@ -248,8 +248,18 @@ function makeValueFinder($: ReturnType<typeof cheerio.load>) {
 
 /**
  * Parse the address value HTML from the .sale-detail-value element.
- * CivilView wraps addresses in a Google Maps link:
- *   <a href="...maps...">123 Main St<br/>City NJ 08401</a>
+ *
+ * CivilView wraps addresses in a Google Maps link, separated by <br/> tags.
+ *
+ * Two-part format (Atlantic, most Cape May):
+ *   123 Main St<br/>Egg Harbor Township NJ 08234
+ *
+ * Three-part format (Cape May condos / units):
+ *   7203 ATLANTIC Avenue<br/>UNIT 306<br/>Wildwood Crest NJ 08260
+ *
+ * Rule: the LAST <br/>-delimited segment is always "City State ZIP".
+ * All preceding segments are concatenated (with a space) to form the
+ * street address — this correctly preserves unit numbers.
  *
  * Returns { streetAddress, city, state, zipCode }.
  */
@@ -267,21 +277,53 @@ function parseAddressHtml(
     .map((s) => s.trim())
     .filter(Boolean);
 
-  // parts[0] = street address, parts[1] = "City State Zip"
-  const streetAddress = parts[0] ?? null;
-  const cityStateZip = parts[1] ?? "";
+  if (parts.length === 0) return { streetAddress: null, city: null, state: null, zipCode: null };
 
-  // Parse "Egg Harbor Township NJ 08234"
+  // Last segment = "City State Zip"; everything before it = street address
+  const cityStateZip = parts[parts.length - 1]!;
+  const streetAddress = parts.length > 1
+    ? parts.slice(0, -1).join(" ").trim()   // joins e.g. "7203 ATLANTIC Avenue" + "UNIT 306"
+    : null;                                  // only one segment — no street/city split possible
+
+  // Parse "Egg Harbor Township NJ 08234" or "Wildwood Crest NJ 08260"
   const zipMatch = cityStateZip.match(/\b(\d{5}(?:-\d{4})?)\s*$/);
   const zipCode = zipMatch?.[1] ?? null;
   const withoutZip = zipCode ? cityStateZip.slice(0, -zipCode.length).trim() : cityStateZip;
 
-  // "Egg Harbor Township NJ" → state = last word, city = rest
+  // "Egg Harbor Township NJ" → state = last 2-letter word, city = rest
   const stateMatch = withoutZip.match(/\s+([A-Z]{2})\s*$/);
   const state = stateMatch?.[1] ?? null;
   const city = state ? withoutZip.slice(0, -state.length).trim() || null : withoutZip || null;
 
   return { streetAddress, city, state, zipCode };
+}
+
+/**
+ * Some CivilView counties (e.g. Cape May) embed the upset/minimum-bid amount
+ * inside a free-text "Description" field rather than a structured label.
+ *
+ * Patterns found in the wild:
+ *   "UPSET AMOUNT: $1,480,000.00"   → extract 1480000
+ *   "MINIMUM BID $211,000.00"       → extract 211000
+ *
+ * Returns null when neither pattern is present.
+ */
+function extractUpsetFromDescription(descriptionText: string): number | null {
+  // "UPSET AMOUNT: $1,480,000.00" or "UPSET AMOUNT $224,900.00"
+  const upsetMatch = descriptionText.match(/UPSET\s+AMOUNT\s*:?\s*\$?([\d,]+(?:\.\d{1,2})?)/i);
+  if (upsetMatch?.[1]) {
+    const n = parseFloat(upsetMatch[1].replace(/,/g, ""));
+    if (!isNaN(n) && n > 0) return n;
+  }
+
+  // "MINIMUM BID $211,000.00" or "MINIMUM BID: $211,000.00"
+  const bidMatch = descriptionText.match(/MINIMUM\s+BID\s*:?\s*\$?([\d,]+(?:\.\d{1,2})?)/i);
+  if (bidMatch?.[1]) {
+    const n = parseFloat(bidMatch[1].replace(/,/g, ""));
+    if (!isNaN(n) && n > 0) return n;
+  }
+
+  return null;
 }
 
 export async function fetchDetailPage(detailUrl: string, countyId = 25): Promise<DetailedListing | null> {
@@ -381,7 +423,17 @@ export async function fetchDetailPage(detailUrl: string, countyId = 25): Promise
     zipCode:           zp || null,
     attorney:          findValue(/attorney/i),
     approxJudgment:    parseMoney(findValue(/approx(?:imate)?\.?\s*(judgment|judgement)/i)),
-    upsetAmount:       parseMoney(findValue(/upset\s*amount/i)),
+    // Upset amount: try structured label first (Atlantic County), then
+    // parse free text in the Description field (Cape May County style),
+    // then fall back to the "Minimum Bid" structured field (also Cape May).
+    upsetAmount: (() => {
+      const fromLabel = parseMoney(findValue(/upset\s*amount/i));
+      if (fromLabel != null) return fromLabel;
+      const descText = findValue(/description/i) ?? "";
+      const fromDesc = extractUpsetFromDescription(descText);
+      if (fromDesc != null) return fromDesc;
+      return parseMoney(findValue(/minimum\s*bid/i));
+    })(),
     priorsLiensTaxes:  findValue(/\bpriors?\b/i),
     taxLot:            findValue(/tax\s*lot/i),
     block:             findValue(/\bblock\b/i),

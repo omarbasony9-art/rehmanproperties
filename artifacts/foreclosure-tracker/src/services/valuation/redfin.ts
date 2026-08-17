@@ -52,9 +52,17 @@ export async function fetchRedfinEstimate(
     "Accept":          "application/json",
   };
 
-  // Build cascading address candidates with progressive simplification
+  // Build cascading address candidates with progressive simplification.
+  // Guard against stripping the meaningful trailing word from city names like
+  // "Ocean City", "Sea Isle City", "Cape May City", "Cape May Court House".
+  const PRESERVE_CITY_NAMES = new Set([
+    "ocean city", "sea isle city", "cape may city", "cape may court house",
+    "jersey city", "atlantic city", "new york city",
+  ]);
   const noParens     = city.replace(/\s*\([^)]*\)\s*/g, "").trim();
-  const strippedCity = noParens.replace(/\s+(Township|Twp|Borough|Boro|City|Village|Town)$/i, "").trim();
+  const strippedCity = PRESERVE_CITY_NAMES.has(noParens.toLowerCase())
+    ? noParens
+    : noParens.replace(/\s+(Township|Twp|Borough|Boro|City|Village|Town)$/i, "").trim();
   const seen = new Set<string>();
   const candidates: string[] = [];
   for (const c of [city, noParens, strippedCity]) {

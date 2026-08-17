@@ -1,0 +1,488 @@
+Fix the **Cape May County** listings in the existing foreclosure application.
+
+DO NOT rebuild the application.
+
+DO NOT break or change the working Atlantic County pipeline.
+
+Cape May County source:
+
+`https://salesweb.civilview.com/Sales/SalesSearch?countyId=52`
+
+The current problems are specifically with the Cape May County:
+
+* UPSET amounts
+* Zillow values
+* Redfin values
+
+I want you to diagnose and fix the actual underlying data extraction/matching problems, not just change what is displayed.
+
+# 1. FIX CAPE MAY UPSET AMOUNTS
+
+For every Cape May listing, make sure the correct **UPSET / Judgment / Sheriff's Sale amount** is being extracted from the individual CivilView detail page.
+
+Do NOT use:
+
+* List price
+* Zillow price
+* Redfin price
+* Estimated market value
+* Plaintiff judgment unless that is actually the CivilView upset amount
+* Random dollar values found elsewhere on the page
+
+Inspect the Cape May CivilView detail page and identify the exact field representing the foreclosure sale upset/judgment amount.
+
+Cape May may label the field differently than Atlantic County.
+
+Do not assume the Atlantic selector/label is identical.
+
+Use label-based extraction where possible.
+
+If Cape May uses labels such as:
+
+* Upset Amount
+* Judgment Amount
+* Final Judgment
+* Sheriff's Upset
+* Amount Due
+
+inspect the actual Cape May HTML and determine which field is the correct source.
+
+# CIVILVIEW SESSION
+
+Make sure the Cape May scraper maintains the proper CivilView session.
+
+Flow should be:
+
+1. Request Cape May search page.
+2. Save ASP.NET/session cookies.
+3. Parse listings.
+4. Open View Details using the SAME session.
+5. Extract detail-page data.
+
+Do not make Cape May detail requests as unrelated stateless requests.
+
+If the detail page redirects back to the search page, detect that and retry using the established session.
+
+# UPSET NORMALIZATION
+
+Store UPSET internally as a numeric value.
+
+Example:
+
+Displayed:
+
+`$128,746.00`
+
+Stored:
+
+`128746`
+
+Remove:
+
+* `$`
+* commas
+* spaces
+* unnecessary text
+
+Do not store the currency-formatted string as the sortable value.
+
+If no legitimate UPSET value exists, use:
+
+`null`
+
+and display:
+
+`—`
+
+Do NOT fabricate a value.
+
+# UPSET SORTING
+
+Keep the existing default:
+
+**lowest UPSET → highest UPSET**
+
+This must work correctly for Cape May County.
+
+Null/missing values should appear after valid numeric values.
+
+---
+
+# 2. FIX CAPE MAY ZILLOW VALUES
+
+The Zillow column for Cape May County needs to use the same real valuation service/API already configured in the application.
+
+Do not create fake Zillow values.
+
+Do not estimate Zillow values yourself.
+
+Diagnose why Cape May addresses are failing or returning incorrect matches.
+
+Before sending an address to Zillow, normalize it properly.
+
+Build a clean Zillow search address using:
+
+`street address + city + state + ZIP`
+
+State should be:
+
+`NJ`
+
+Examples:
+
+`123 Main St, Wildwood, NJ 08260`
+
+`10 Ocean Ave, Ocean City, NJ 08226`
+
+# CAPE MAY ADDRESS HANDLING
+
+Cape May County contains municipalities and mailing addresses that can be tricky.
+
+Make sure address normalization handles locations including:
+
+* Ocean City
+* Wildwood
+* Wildwood Crest
+* North Wildwood
+* West Wildwood
+* Cape May
+* West Cape May
+* Cape May Point
+* Cape May Court House
+* Villas
+* North Cape May
+* Rio Grande
+* Woodbine
+* Sea Isle City
+* Avalon
+* Stone Harbor
+* Dennisville
+* Marmora
+* Tuckahoe
+* Green Creek
+* Erma
+* Goshen
+
+Do not incorrectly replace the actual municipality with "Cape May County."
+
+The Zillow query needs the real property city/locality.
+
+# UNIT / CONDO HANDLING
+
+Cape May County has many condos and shore properties.
+
+Preserve:
+
+* Unit numbers
+* Apartment numbers
+* Condo numbers
+
+Examples:
+
+`Unit 3`
+`#204`
+`Apt 4`
+
+Try the full unit address first.
+
+If the Zillow API does not match and the property is clearly a condo/unit, use the existing safe fallback matching logic.
+
+Do NOT silently match a different unit in the same building.
+
+# ZILLOW VALIDATION
+
+When Zillow returns a property, compare returned information against the foreclosure listing.
+
+Validate as much as possible using:
+
+* Street number
+* Street name
+* City
+* ZIP
+* Unit number when applicable
+
+Reject obvious mismatches.
+
+Do not assign a Zestimate from another property simply because the street name is similar.
+
+Store:
+
+* Zillow value
+* Zillow property identifier/ZPID if available
+* Zillow matched address
+* Zillow lookup status/error
+
+This will make debugging easier.
+
+---
+
+# 3. FIX CAPE MAY REDFIN VALUES
+
+Fix Redfin for Cape May County using the existing Redfin integration.
+
+Do NOT invent Redfin estimates.
+
+Normalize the address before lookup exactly as done for Zillow.
+
+Use:
+
+`street + city + NJ + ZIP`
+
+Preserve unit numbers.
+
+# REDFIN MATCH VALIDATION
+
+Make sure the Redfin result actually belongs to the CivilView property.
+
+Validate:
+
+* Street number
+* Street
+* Municipality
+* ZIP
+* Unit when applicable
+
+Do not accept a Redfin result from a neighboring property or different condo unit.
+
+Store debugging information where useful:
+
+* Redfin estimated value
+* Redfin matched address
+* Redfin property URL/ID if available
+* Redfin lookup status
+* Redfin error/reason if no match
+
+If no legitimate Redfin estimate exists:
+
+Display:
+
+`—`
+
+Do not substitute Zillow into the Redfin column.
+
+---
+
+# 4. DO NOT MIX THE THREE VALUES
+
+These fields must remain independent:
+
+### UPSET
+
+Source:
+
+Cape May CivilView foreclosure detail page.
+
+### ZILLOW
+
+Source:
+
+Existing Zillow integration/API.
+
+### REDFIN
+
+Source:
+
+Existing Redfin integration/API.
+
+Never copy one field into another merely because data is missing.
+
+For example:
+
+If Zillow = `$400,000`
+
+and Redfin is unavailable:
+
+Redfin must show:
+
+`—`
+
+NOT `$400,000`.
+
+---
+
+# 5. MARKET VALUE
+
+After fixing Zillow and Redfin, continue using the application's existing Market Value logic.
+
+However, make sure Market Value only uses legitimate source values.
+
+If the existing logic chooses a value based on:
+
+* Zillow only
+* Redfin only
+* Both values
+* Existing county/assessor data
+
+keep the intended logic consistent.
+
+Do not fabricate a Market Value merely to populate the table.
+
+---
+
+# 6. RECALCULATE CAPE MAY DATA
+
+After fixing extraction and matching, rerun Cape May listings.
+
+For each Cape May property:
+
+1. Fetch current CivilView listing.
+2. Open detail page with valid session.
+3. Extract correct UPSET.
+4. Normalize property address.
+5. Query Zillow.
+6. Validate Zillow match.
+7. Query Redfin.
+8. Validate Redfin match.
+9. Update Market Value.
+10. Recalculate Spread.
+11. Recalculate DISC %.
+12. Update Warnings.
+
+Do not require me to manually delete the old Cape May records first.
+
+Update existing records using:
+
+`county + sheriff_number`
+
+instead of creating duplicates.
+
+---
+
+# 7. DEBUG WHY CAPE MAY IS FAILING
+
+Add detailed Cape May refresh/debug information.
+
+After syncing Cape May, report:
+
+* Listings found
+* Detail pages opened
+* Detail pages failed
+* UPSET values found
+* UPSET values missing
+* Zillow lookups attempted
+* Zillow matches
+* Zillow no matches
+* Zillow errors
+* Redfin lookups attempted
+* Redfin matches
+* Redfin no matches
+* Redfin errors
+* Address normalization failures
+* Records updated
+* Records inserted
+
+For failed Zillow/Redfin listings, log:
+
+* Original CivilView address
+* Normalized address
+* Search address sent to API
+* Returned matched address if any
+* Reason match was rejected
+
+Do not expose API keys in logs.
+
+---
+
+# 8. CAPE MAY WARNINGS
+
+Improve warnings so I can see WHY data is missing.
+
+Examples:
+
+`UPSET NOT FOUND`
+
+`ZILLOW NO MATCH`
+
+`ZILLOW ADDRESS MISMATCH`
+
+`REDFIN NO MATCH`
+
+`REDFIN ADDRESS MISMATCH`
+
+`UNIT MATCH UNCERTAIN`
+
+`DETAIL PAGE FAILED`
+
+Do not just show a warning count with no useful explanation in the detail view.
+
+---
+
+# 9. COUNTY DROPDOWN
+
+Keep the existing All Listings county dropdown.
+
+When:
+
+`Cape May County`
+
+is selected, the corrected Cape May data should appear in the same table.
+
+Do not make another Cape May page.
+
+---
+
+# 10. DO NOT BREAK ATLANTIC
+
+This is extremely important.
+
+Atlantic County is already working better.
+
+Do NOT rewrite Atlantic County extraction just to fix Cape May.
+
+If CivilView parsing can be shared safely, use:
+
+* common base parser
+* county-specific field mappings
+* county-specific normalization when necessary
+
+Example:
+
+`AtlanticCountyConfig`
+
+`CapeMayCountyConfig`
+
+Cape May-specific fixes must not change existing Atlantic values.
+
+---
+
+# TEST WITH REAL CAPE MAY LISTINGS
+
+Do not declare this fixed after testing one property.
+
+Test at least:
+
+* One normal single-family property
+* One Wildwood-area property
+* One Ocean City property
+* One condo/unit if available
+* One Cape May Court House/Villas/Rio Grande-area property
+
+For each test, verify:
+
+CivilView address → correct
+
+UPSET → correct
+
+Zillow → correct property
+
+Redfin → correct property
+
+Market Value → legitimate
+
+Spread → correct math
+
+DISC % → correct math
+
+# FINAL REQUIREMENT
+
+Do not just make the columns look populated.
+
+I want the underlying Cape May data to be ACCURATE.
+
+If a value cannot be obtained confidently, show:
+
+`—`
+
+instead of guessing.
+
+Fix and rerun the Cape May County pipeline now.

@@ -32,7 +32,15 @@ export type DealWarning =
   | "VALUATIONS_DIFFER_SIGNIFICANTLY"
   | "MARKET_VALUE_UNKNOWN"
   | "NEGATIVE_SPREAD"
-  | "VALUATION_STALE";
+  | "VALUATION_STALE"
+  // Data-quality warnings (especially useful for multi-county diagnostics)
+  | "UPSET_NOT_FOUND"           // CivilView detail page scraped but no upset value found
+  | "ZILLOW_NO_MATCH"           // Zillow API returned no property match
+  | "ZILLOW_MISMATCH"           // Zillow returned a property but address doesn't match
+  | "REDFIN_NO_MATCH"           // Redfin API returned no property match
+  | "REDFIN_MISMATCH"           // Redfin returned a property but address doesn't match
+  | "UNIT_MATCH_UNCERTAIN"      // Unit/condo number in address — match confidence reduced
+  | "DETAIL_PAGE_FAILED";       // CivilView detail page could not be fetched
 
 export interface DealMetrics {
   dealRating: DealRating;
@@ -125,14 +133,19 @@ export function computeWarnings(opts: {
   const priors   = (opts.priorsLiensTaxes ?? "").toLowerCase();
 
   // Missing data
-  if (!opts.upsetAmount)         warnings.add("MISSING_UPSET_AMOUNT");
+  if (!opts.upsetAmount) {
+    warnings.add("MISSING_UPSET_AMOUNT");
+    warnings.add("UPSET_NOT_FOUND");
+  }
   if (!opts.marketValueUsed)     warnings.add("MARKET_VALUE_UNKNOWN");
   // Only flag missing estimates when the provider IS configured (configured but no value = actionable)
   if (opts.zillowStatus && opts.zillowStatus !== "SUCCESS" && opts.zillowStatus !== "NOT_CONFIGURED") {
     warnings.add("NO_ZILLOW_ESTIMATE");
+    warnings.add("ZILLOW_NO_MATCH");
   }
   if (opts.redfinStatus && opts.redfinStatus !== "SUCCESS" && opts.redfinStatus !== "NOT_CONFIGURED") {
     warnings.add("NO_REDFIN_ESTIMATE");
+    warnings.add("REDFIN_NO_MATCH");
   }
 
   // Stale Zillow (> 7 days old)
