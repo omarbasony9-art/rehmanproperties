@@ -1,0 +1,182 @@
+There is still a frontend/backend response-shape bug in the foreclosure tracker.
+
+Current runtime error:
+
+deals.map is not a function
+
+The screenshot shows the failure around line 253 where the frontend does:
+
+deals.map(...)
+
+DO NOT just add optional chaining and hide the problem.
+
+Inspect the actual response from:
+
+GET /api/deals
+
+and determine exactly what JSON shape it returns.
+
+Then normalize the response before the UI uses it.
+
+Create a single helper for API array normalization so this problem does not happen again.
+
+For example:
+
+function normalizeArray(data: any, keys: string[] = []) {
+  if (Array.isArray(data)) return data;
+
+  for (const key of keys) {
+    if (Array.isArray(data?.[key])) {
+      return data[key];
+    }
+  }
+
+  return [];
+}
+
+Then for deals use something similar to:
+
+const deals = normalizeArray(dealsQ.data, [
+  "items",
+  "deals",
+  "foreclosures",
+  "results"
+]);
+
+The UI must only ever call:
+
+deals.map(...)
+deals.length
+deals.filter(...)
+
+after `deals` has been guaranteed to be an array.
+
+Also fix the foreclosure listing query the same way.
+
+Search the entire frontend for:
+
+.map(
+.filter(
+.length
+.items
+.deals
+.foreclosures
+
+especially data coming from React Query/API requests.
+
+Make sure NONE of these pages can crash if an API response is:
+- undefined
+- null
+- {}
+- { items: [] }
+- { deals: [] }
+- []
+- an error response
+
+For queries, explicitly create normalized arrays such as:
+
+const foreclosureRows = normalizeArray(listQ.data, [
+  "items",
+  "foreclosures",
+  "results"
+]);
+
+const deals = normalizeArray(dealsQ.data, [
+  "items",
+  "deals",
+  "foreclosures",
+  "results"
+]);
+
+const newDeals = normalizeArray(newDealsQ.data, [
+  "items",
+  "deals",
+  "foreclosures",
+  "results"
+]);
+
+Then the render code should use ONLY those normalized variables.
+
+For example:
+
+{deals.length === 0 ? (
+  <EmptyState />
+) : (
+  deals.map((deal) => (
+    <DealCard key={deal.sheriffNumber} deal={deal} />
+  ))
+)}
+
+Also inspect and print the actual JSON response from:
+
+GET /api/health
+GET /api/foreclosures
+GET /api/deals
+GET /api/deals/new
+
+Tell me exactly what each endpoint returns.
+
+IMPORTANT:
+I want one consistent API response contract.
+
+Prefer standardizing collection endpoints to:
+
+{
+  "items": [],
+  "count": 0
+}
+
+So:
+
+GET /api/foreclosures
+
+returns:
+
+{
+  "items": [...],
+  "count": 10
+}
+
+GET /api/deals
+
+returns:
+
+{
+  "items": [...],
+  "count": 3
+}
+
+GET /api/deals/new
+
+returns:
+
+{
+  "items": [...],
+  "count": 1
+}
+
+If you change the backend to this format, update ALL frontend queries to use it consistently.
+
+Also make TypeScript types match the real response.
+
+Example:
+
+interface ListResponse<T> {
+  items: T[];
+  count: number;
+}
+
+Do not use `any` permanently if the project is TypeScript.
+
+After making the fix:
+
+1. Run typecheck.
+2. Run tests.
+3. Start the app.
+4. Visit the dashboard.
+5. Visit the deals page.
+6. Visit the foreclosure listings page.
+7. Confirm no `.map is not a function` errors.
+8. Confirm an empty database shows "No deals found" instead of crashing.
+9. Confirm API errors show a useful error state.
+10. Tell me exactly which files you changed and what JSON /api/deals actually returned before the fix.

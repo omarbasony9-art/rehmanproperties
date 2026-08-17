@@ -7,6 +7,7 @@ export const dealsRouter = Router();
  * GET /api/deals
  * Returns EXTREME, MAJOR, STRONG deals sorted by deal_score DESC.
  * Query params: rating, minimumDiscount, minimumSpread, maxUpset
+ * Response: { items: Deal[], count: number }
  */
 dealsRouter.get("/", async (req, res) => {
   try {
@@ -58,7 +59,8 @@ dealsRouter.get("/", async (req, res) => {
       params,
     );
 
-    res.json(rows.map(formatDeal));
+    const items = rows.map(formatDeal);
+    res.json({ items, count: items.length });
   } catch (err) {
     console.error("[GET /deals]", err);
     res.status(500).json({ error: "Internal server error" });
@@ -68,6 +70,7 @@ dealsRouter.get("/", async (req, res) => {
 /**
  * GET /api/deals/new
  * Returns major/strong/extreme deals discovered in the past 48 hours.
+ * Response: { items: Deal[], count: number }
  */
 dealsRouter.get("/new", async (req, res) => {
   try {
@@ -83,7 +86,8 @@ dealsRouter.get("/new", async (req, res) => {
        ORDER BY f.deal_score DESC NULLS LAST`,
     );
 
-    res.json(rows.map(formatDeal));
+    const items = rows.map(formatDeal);
+    res.json({ items, count: items.length });
   } catch (err) {
     console.error("[GET /deals/new]", err);
     res.status(500).json({ error: "Internal server error" });
@@ -98,37 +102,37 @@ function formatDeal(row: any): Record<string, unknown> {
     : false;
 
   return {
-    sheriffNumber: row.sheriff_number,
-    courtCaseNumber: row.court_case_number,
-    currentSaleDate: row.current_sale_date,
-    plaintiff: row.plaintiff,
-    defendant: row.defendant,
-    address: row.address,
-    city: row.city,
-    state: row.state,
-    zipCode: row.zip_code,
-    upsetAmount: row.upset_amount ? parseFloat(row.upset_amount) : null,
-    approxJudgment: row.approx_judgment ? parseFloat(row.approx_judgment) : null,
-    estimatedMarketValue: row.estimated_market_value
-      ? parseFloat(row.estimated_market_value)
-      : null,
-    foreclosureType: row.foreclosure_type,
-    dealRating: row.deal_rating,
-    dealScore: row.deal_score ? parseFloat(row.deal_score) : 0,
-    estimatedSpread: row.estimated_spread ? parseFloat(row.estimated_spread) : null,
-    discountPercent: row.discount_percent ? parseFloat(row.discount_percent) : null,
-    equityMultiple: row.equity_multiple ? parseFloat(row.equity_multiple) : null,
-    dealWarnings: row.deal_warnings ?? [],
-    occupancyStatus: row.occupancy_status,
-    detailUrl: row.detail_url,
-    googleMapsUrl: row.google_maps_url,
-    zillowUrl: row.zillow_url,
-    bedrooms: row.bedrooms ? parseFloat(row.bedrooms) : null,
-    bathrooms: row.bathrooms ? parseFloat(row.bathrooms) : null,
-    squareFeet: row.square_feet ? parseFloat(row.square_feet) : null,
-    yearBuilt: row.year_built ? parseFloat(row.year_built) : null,
-    firstSeen: row.first_seen,
-    lastChanged: row.last_changed,
+    sheriffNumber:        row.sheriff_number,
+    courtCaseNumber:      row.court_case_number,
+    currentSaleDate:      row.current_sale_date,
+    // Field names match the frontend Deal interface
+    plaintiffName:        row.plaintiff ?? null,
+    defendantName:        row.defendant ?? null,
+    streetAddress:        row.address ?? null,
+    city:                 row.city ?? null,
+    state:                row.state ?? null,
+    zipCode:              row.zip_code ?? null,
+    upsetAmount:          row.upset_amount        ? parseFloat(row.upset_amount)        : null,
+    approxJudgment:       row.approx_judgment     ? parseFloat(row.approx_judgment)     : null,
+    estimatedMarketValue: row.estimated_market_value ? parseFloat(row.estimated_market_value) : null,
+    foreclosureType:      row.foreclosure_type ?? null,
+    dealRating:           row.deal_rating ?? "NORMAL",
+    dealScore:            row.deal_score          ? parseFloat(row.deal_score)          : 0,
+    estimatedSpread:      row.estimated_spread    ? parseFloat(row.estimated_spread)    : null,
+    discountPercent:      row.discount_percent    ? parseFloat(row.discount_percent)    : null,
+    equityMultiple:       row.equity_multiple     ? parseFloat(row.equity_multiple)     : null,
+    // Consistent field name: `warnings` (was `dealWarnings`)
+    warnings:             Array.isArray(row.deal_warnings) ? row.deal_warnings : [],
+    occupancyStatus:      row.occupancy_status ?? null,
+    detailUrl:            row.detail_url ?? null,
+    googleMapsUrl:        row.google_maps_url ?? null,
+    zillowUrl:            row.zillow_url ?? null,
+    bedrooms:             row.bedrooms            ? parseFloat(row.bedrooms)            : null,
+    bathrooms:            row.bathrooms           ? parseFloat(row.bathrooms)           : null,
+    squareFeet:           row.square_feet         ? parseFloat(row.square_feet)         : null,
+    yearBuilt:            row.year_built          ? parseFloat(row.year_built)          : null,
+    firstSeen:            row.first_seen ?? null,
+    lastChanged:          row.last_changed ?? null,
     isNew,
   };
 }

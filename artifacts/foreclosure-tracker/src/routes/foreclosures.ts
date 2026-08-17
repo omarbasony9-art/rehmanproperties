@@ -59,11 +59,13 @@ foreclosuresRouter.get("/", async (req, res) => {
       params,
     );
 
+    const items = rows.map(formatForeclosure);
     res.json({
       total: parseInt(countRows[0]?.total ?? "0"),
+      count: parseInt(countRows[0]?.total ?? "0"),
       page,
       limit: pageLimit,
-      items: rows.map(formatForeclosure),
+      items,
     });
   } catch (err) {
     console.error("[GET /foreclosures]", err);
@@ -127,61 +129,57 @@ function formatForeclosure(row: any): Record<string, unknown> {
     : false;
 
   return {
-    sheriffNumber: row.sheriff_number,
-    courtCaseNumber: row.court_case_number,
-    currentSaleDate: row.current_sale_date,
-    originalSaleDate: row.original_sale_date,
-    plaintiff: row.plaintiff,
-    defendant: row.defendant,
-    address: row.address,
-    city: row.city,
-    state: row.state,
-    zipCode: row.zip_code,
-    attorney: row.attorney,
-    approxJudgment: row.approx_judgment ? parseFloat(row.approx_judgment) : null,
-    upsetAmount: row.upset_amount ? parseFloat(row.upset_amount) : null,
-    priorsLiensTaxes: row.priors_liens_taxes,
-    taxLot: row.tax_lot,
-    block: row.block,
-    nearestCrossStreet: row.nearest_cross_street,
-    occupancyStatus: row.occupancy_status,
-    propertyNotes: row.property_notes,
-    detailUrl: row.detail_url,
-    googleMapsUrl: row.google_maps_url,
-    zillowUrl: row.zillow_url,
-    foreclosureType: row.foreclosure_type,
-    classificationConfidence: row.classification_confidence,
-    classificationEvidence: row.classification_evidence,
-    dealRating: row.deal_rating,
-    dealScore: row.deal_score ? parseFloat(row.deal_score) : 0,
-    estimatedSpread: row.estimated_spread ? parseFloat(row.estimated_spread) : null,
-    discountPercent: row.discount_percent ? parseFloat(row.discount_percent) : null,
-    equityMultiple: row.equity_multiple ? parseFloat(row.equity_multiple) : null,
-    dealWarnings: row.deal_warnings ?? [],
+    sheriffNumber:            row.sheriff_number,
+    courtCaseNumber:          row.court_case_number,
+    currentSaleDate:          row.current_sale_date,
+    originalSaleDate:         row.original_sale_date,
+    // Consistent field names matching the frontend Listing interface
+    plaintiffName:            row.plaintiff ?? null,
+    defendantName:            row.defendant ?? null,
+    streetAddress:            row.address ?? null,
+    city:                     row.city ?? null,
+    state:                    row.state ?? null,
+    zipCode:                  row.zip_code ?? null,
+    attorney:                 row.attorney ?? null,
+    approxJudgment:           row.approx_judgment       ? parseFloat(row.approx_judgment)       : null,
+    upsetAmount:              row.upset_amount           ? parseFloat(row.upset_amount)           : null,
+    priorsLiensTaxes:         row.priors_liens_taxes ?? null,
+    taxLot:                   row.tax_lot ?? null,
+    block:                    row.block ?? null,
+    nearestCrossStreet:       row.nearest_cross_street ?? null,
+    occupancyStatus:          row.occupancy_status ?? null,
+    propertyNotes:            row.property_notes ?? null,
+    detailUrl:                row.detail_url ?? null,
+    googleMapsUrl:            row.google_maps_url ?? null,
+    zillowUrl:                row.zillow_url ?? null,
+    foreclosureType:          row.foreclosure_type ?? null,
+    classificationConfidence: row.classification_confidence ?? null,
+    classificationEvidence:   row.classification_evidence ?? null,
+    dealRating:               row.deal_rating ?? null,
+    dealScore:                row.deal_score             ? parseFloat(row.deal_score)             : 0,
+    estimatedSpread:          row.estimated_spread       ? parseFloat(row.estimated_spread)       : null,
+    discountPercent:          row.discount_percent       ? parseFloat(row.discount_percent)       : null,
+    equityMultiple:           row.equity_multiple        ? parseFloat(row.equity_multiple)        : null,
+    // Consistent field name: `warnings` (was `dealWarnings`)
+    warnings:                 Array.isArray(row.deal_warnings) ? row.deal_warnings : [],
     // Valuation
-    estimatedMarketValue: row.estimated_market_value
-      ? parseFloat(row.estimated_market_value)
-      : null,
-    activeListingPrice: row.active_listing_price
-      ? parseFloat(row.active_listing_price)
-      : null,
-    lastSalePrice: row.last_sale_price ? parseFloat(row.last_sale_price) : null,
-    lastSaleDate: row.last_sale_date ?? null,
-    taxAssessedValue: row.tax_assessed_value
-      ? parseFloat(row.tax_assessed_value)
-      : null,
-    bedrooms: row.bedrooms ? parseFloat(row.bedrooms) : null,
-    bathrooms: row.bathrooms ? parseFloat(row.bathrooms) : null,
-    squareFeet: row.square_feet ? parseFloat(row.square_feet) : null,
-    yearBuilt: row.year_built ? parseFloat(row.year_built) : null,
-    propertyType: row.pv_property_type ?? null,
-    valuationFetchedAt: row.valuation_fetched_at ?? null,
+    estimatedMarketValue:     row.estimated_market_value ? parseFloat(row.estimated_market_value) : null,
+    activeListingPrice:       row.active_listing_price   ? parseFloat(row.active_listing_price)   : null,
+    lastSalePrice:            row.last_sale_price        ? parseFloat(row.last_sale_price)        : null,
+    lastSaleDate:             row.last_sale_date ?? null,
+    taxAssessedValue:         row.tax_assessed_value     ? parseFloat(row.tax_assessed_value)     : null,
+    bedrooms:                 row.bedrooms               ? parseFloat(row.bedrooms)               : null,
+    bathrooms:                row.bathrooms              ? parseFloat(row.bathrooms)              : null,
+    squareFeet:               row.square_feet            ? parseFloat(row.square_feet)            : null,
+    yearBuilt:                row.year_built             ? parseFloat(row.year_built)             : null,
+    propertyType:             row.pv_property_type ?? null,
+    valuationFetchedAt:       row.valuation_fetched_at ?? null,
     // Timestamps
-    firstSeen: row.first_seen,
-    lastSeen: row.last_seen,
+    firstSeen:   row.first_seen,
+    lastSeen:    row.last_seen,
     lastChanged: row.last_changed,
     lastUpdated: row.last_updated,
     isNew,
-    isRemoved: row.is_removed,
+    isRemoved:   row.is_removed,
   };
 }

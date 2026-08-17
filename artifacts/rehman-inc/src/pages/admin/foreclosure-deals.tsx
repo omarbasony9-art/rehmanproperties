@@ -13,32 +13,47 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { adminFetch } from "@/lib/admin-api";
+import { normalizeArray } from "@/lib/normalize-array";
 
 const BASE = "/foreclosure-tracker/api";
 
+// Matches the shape returned by formatDeal() in deals.ts
 interface Deal {
-  id: number;
   sheriffNumber: string;
+  courtCaseNumber: string | null;
+  currentSaleDate: string | null;
   plaintiffName: string | null;
   defendantName: string | null;
   streetAddress: string | null;
   city: string | null;
   state: string | null;
   zipCode: string | null;
-  currentSaleDate: string | null;
   upsetAmount: number | null;
+  approxJudgment: number | null;
+  estimatedMarketValue: number | null;
   foreclosureType: string | null;
-  occupancyStatus: string | null;
-  priors: string | null;
-  googleMapsUrl: string | null;
-  zillowUrl: string | null;
   dealRating: string;
   dealScore: number | null;
-  estimatedMarketValue: number | null;
   estimatedSpread: number | null;
   discountPercent: number | null;
   equityMultiple: number | null;
   warnings: string[];
+  occupancyStatus: string | null;
+  detailUrl: string | null;
+  googleMapsUrl: string | null;
+  zillowUrl: string | null;
+  bedrooms: number | null;
+  bathrooms: number | null;
+  squareFeet: number | null;
+  yearBuilt: number | null;
+  firstSeen: string | null;
+  lastChanged: string | null;
+  isNew: boolean;
+}
+
+interface DealsResponse {
+  items: Deal[];
+  count: number;
 }
 
 type Rating = "EXTREME" | "MAJOR" | "STRONG" | "NORMAL" | "all";
@@ -82,6 +97,9 @@ function DealCard({ deal }: { deal: Deal }) {
                 <TrendingUp className="w-3 h-3" /> {deal.dealScore}/100
               </span>
             )}
+            {deal.isNew && (
+              <span className="text-xs font-semibold px-2 py-0.5 rounded bg-primary text-primary-foreground">NEW</span>
+            )}
           </div>
           <p className="text-sm font-semibold mt-1.5">{addr || deal.sheriffNumber}</p>
           <p className="text-xs text-muted-foreground font-mono mt-0.5">{deal.sheriffNumber}</p>
@@ -118,7 +136,7 @@ function DealCard({ deal }: { deal: Deal }) {
       </div>
 
       {/* Warnings */}
-      {deal.warnings?.length > 0 && (
+      {deal.warnings.length > 0 && (
         <div className="space-y-1">
           {deal.warnings.map((w) => (
             <div key={w} className="flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400">
@@ -165,13 +183,13 @@ export default function AdminForeclosureDeals() {
   const params = new URLSearchParams();
   if (rating !== "all") params.set("rating", rating);
 
-  const dealsQ = useQuery<Deal[]>({
+  const dealsQ = useQuery<DealsResponse>({
     queryKey: ["fc-deals", rating],
     queryFn: () => fetch(`${BASE}/deals?${params}`).then((r) => r.json()),
     refetchInterval: 120_000,
   });
 
-  const newDealsQ = useQuery<Deal[]>({
+  const newDealsQ = useQuery<DealsResponse>({
     queryKey: ["fc-deals-new"],
     queryFn: () => fetch(`${BASE}/deals/new`).then((r) => r.json()),
   });
@@ -189,8 +207,10 @@ export default function AdminForeclosureDeals() {
     }
   };
 
-  const deals = dealsQ.data ?? [];
-  const newDeals = newDealsQ.data ?? [];
+  // Normalize: API returns { items: Deal[], count: number }.
+  // normalizeArray handles bare arrays, keyed wrappers, errors, and undefined.
+  const deals    = normalizeArray<Deal>(dealsQ.data,    ["items", "deals", "results"]);
+  const newDeals = normalizeArray<Deal>(newDealsQ.data, ["items", "deals", "results"]);
 
   return (
     <AdminLayout>
@@ -236,6 +256,11 @@ export default function AdminForeclosureDeals() {
           <div className="flex items-center justify-center h-40">
             <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
           </div>
+        ) : dealsQ.isError ? (
+          <div className="flex flex-col items-center justify-center h-40 text-muted-foreground gap-2">
+            <p className="text-sm font-medium text-destructive">Unable to load deals.</p>
+            <p className="text-xs">Check that the Foreclosure Tracker service is running.</p>
+          </div>
         ) : deals.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-40 text-muted-foreground gap-2">
             <p className="text-sm">No deals found.</p>
@@ -250,7 +275,7 @@ export default function AdminForeclosureDeals() {
             <p className="text-sm text-muted-foreground">{deals.length} deal{deals.length !== 1 ? "s" : ""}</p>
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
               {deals.map((deal) => (
-                <DealCard key={deal.id} deal={deal} />
+                <DealCard key={deal.sheriffNumber} deal={deal} />
               ))}
             </div>
           </>

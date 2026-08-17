@@ -28,38 +28,38 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { adminFetch } from "@/lib/admin-api";
+import { normalizeArray } from "@/lib/normalize-array";
 
 const BASE = "/foreclosure-tracker/api";
 
 type ForeclosureType = "all" | "tax_foreclosure" | "lien_foreclosure" | "mortgage_foreclosure" | "unknown";
 
+// Matches the shape returned by formatForeclosure() in foreclosures.ts
 interface Listing {
-  id: number;
   sheriffNumber: string;
+  courtCaseNumber: string | null;
+  currentSaleDate: string | null;
+  originalSaleDate: string | null;
   plaintiffName: string | null;
   defendantName: string | null;
   streetAddress: string | null;
   city: string | null;
   state: string | null;
   zipCode: string | null;
-  currentSaleDate: string | null;
   upsetAmount: number | null;
-  status: string | null;
   occupancyStatus: string | null;
   foreclosureType: string | null;
-  priors: string | null;
-  description: string | null;
+  priorsLiensTaxes: string | null;
   googleMapsUrl: string | null;
   zillowUrl: string | null;
-  statusHistory: Array<{ saleDate: string; status: string }> | null;
   dealRating: string | null;
   dealScore: number | null;
   estimatedMarketValue: number | null;
   estimatedSpread: number | null;
   discountPercent: number | null;
   warnings: string[];
-  firstSeenAt: string | null;
-  lastChecked: string | null;
+  firstSeen: string | null;
+  lastSeen: string | null;
 }
 
 interface ListResponse {
@@ -166,35 +166,11 @@ function DetailSheet({ listing, open, onClose }: { listing: Listing | null; open
             <Row label="Plaintiff"   value={listing.plaintiffName} />
             <Row label="Defendant"   value={listing.defendantName} />
             <Row label="Sale Date"   value={fmtDate(listing.currentSaleDate)} />
-            <Row label="Status"      value={listing.status} />
             <Row label="Occupancy"   value={listing.occupancyStatus} />
-            <Row label="Priors"      value={listing.priors} />
-            <Row label="First Seen"  value={fmtDateTime(listing.firstSeenAt)} />
-            <Row label="Last Checked" value={fmtDateTime(listing.lastChecked)} />
+            <Row label="Priors/Liens" value={listing.priorsLiensTaxes} />
+            <Row label="First Seen"  value={fmtDateTime(listing.firstSeen)} />
+            <Row label="Last Seen"   value={fmtDateTime(listing.lastSeen)} />
           </div>
-
-          {/* Description */}
-          {listing.description && (
-            <div>
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">Description</p>
-              <p className="text-sm text-foreground whitespace-pre-wrap">{listing.description}</p>
-            </div>
-          )}
-
-          {/* Adjournment History */}
-          {listing.statusHistory && listing.statusHistory.length > 0 && (
-            <div>
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">Sale History</p>
-              <div className="space-y-1">
-                {listing.statusHistory.map((h, i) => (
-                  <div key={i} className="flex justify-between text-xs px-2 py-1.5 rounded bg-muted/50">
-                    <span>{fmtDate(h.saleDate)}</span>
-                    <span className="text-muted-foreground">{h.status}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
 
           {/* External Links */}
           <div className="flex gap-2">
@@ -252,13 +228,9 @@ export default function AdminForeclosures() {
     queryFn: () => fetch(`${BASE}/foreclosures?${params}`).then((r) => r.json()),
   });
 
-  // Normalize: API returns { total, page, limit, items: [...] }
-  // Guard against missing/malformed items so the page never crashes.
-  const listings: Listing[] = Array.isArray(listQ.data?.items)
-    ? listQ.data.items
-    : Array.isArray(listQ.data)
-      ? (listQ.data as unknown as Listing[])
-      : [];
+  // Normalize: API returns { total, count, page, limit, items: [...] }.
+  // normalizeArray handles missing/malformed responses so the page never crashes.
+  const listings = normalizeArray<Listing>(listQ.data, ["items"]);
 
   const totalPages = Math.ceil((listQ.data?.total ?? 0) / LIMIT);
 
@@ -373,7 +345,7 @@ export default function AdminForeclosures() {
                     const addr = [item.streetAddress, item.city].filter(Boolean).join(", ");
                     return (
                       <tr
-                        key={item.id}
+                        key={item.sheriffNumber}
                         onClick={() => setSelected(item)}
                         className="hover:bg-muted/40 cursor-pointer transition-colors"
                       >
