@@ -1,0 +1,87 @@
+STOP. Do not build a new valuation architecture yet.
+
+The Foreclosure Tracker was ALREADY WORKING correctly in the Replit Preview before we moved/fixed it for Cloudflare.
+
+In the Replit Preview, after CivilView loaded the listings, these fields WERE being populated:
+
+- Zillow
+- Redfin
+- Market Value
+- Spread
+- DISC %
+- Score
+- Deal rating
+
+On the Cloudflare production version, CivilView listings now load, but those fields stay blank / Not valued / UNKNOWN.
+
+I want you to COMPARE the working Replit Preview implementation against the new Cloudflare implementation and port the SAME working valuation behavior to Cloudflare.
+
+DO NOT redesign the system.
+DO NOT invent a new scoring system.
+DO NOT change formulas.
+DO NOT change provider priority.
+DO NOT change how Zillow/Redfin matching worked if it already worked in Preview.
+DO NOT add a new service.
+DO NOT push to GitHub yet.
+
+FIRST determine exactly:
+
+1. Which backend route/service the Replit Preview used when Refresh CivilView was clicked.
+2. Which function automatically ran Zillow valuation in Preview.
+3. Which function automatically ran Redfin valuation in Preview.
+4. Where Market Value was calculated.
+5. Where Spread was calculated.
+6. Where DISC % was calculated.
+7. Where Score / Deal Rating was calculated.
+8. Whether Preview used the separate artifacts/foreclosure-tracker backend/service rather than the new rehman-inc Cloudflare Functions.
+9. Which exact part of that working flow is missing from the Cloudflare implementation.
+
+Search the existing project code — especially:
+
+artifacts/foreclosure-tracker/
+artifacts/rehman-inc/functions/_foreclosures.ts
+artifacts/rehman-inc/functions/api/[[route]].ts
+
+and any valuation / Zillow / Redfin / CivilView files.
+
+The goal is:
+
+REPLIT PREVIEW WORKING LOGIC
+→ port faithfully
+→ CLOUDFLARE PAGES FUNCTIONS
+
+The production flow should behave the same way the working Replit Preview did.
+
+If Refresh CivilView in Preview automatically performed valuation, make Cloudflare Refresh CivilView do the same thing using the existing Cloudflare secrets:
+
+ZILLOW_RAPIDAPI_KEY
+ZILLOW_RAPIDAPI_HOST
+REDFIN_RAPIDAPI_KEY
+REDFIN_RAPIDAPI_HOST
+RENTCAST_API_KEY
+
+All provider calls must remain server-side.
+
+Do not expose secrets.
+
+Also compare the actual Zillow and Redfin endpoint URLs, request headers, query parameters, response parsing, address matching, and field mapping between Preview and Cloudflare.
+
+I do NOT want a replacement implementation if the original one already works.
+
+I want the WORKING PREVIEW CODE/LOGIC reused wherever possible.
+
+After you inspect and fix it:
+
+- run TypeScript checks
+- run production build
+- DO NOT push to GitHub
+
+Then tell me:
+
+1. Exactly why Preview populated valuation but Cloudflare didn't.
+2. Which working Preview function/code path was missing from Cloudflare.
+3. What you ported/reused.
+4. Whether Refresh CivilView will now populate Zillow/Redfin automatically exactly like Preview did.
+5. Which files changed.
+
+DO NOT push to GitHub.

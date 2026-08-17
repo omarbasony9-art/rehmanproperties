@@ -139,6 +139,11 @@ export const VALID_COUNTIES = Object.keys(COUNTY_IDS);
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
 const DELAY_MS = 300;
 const VALUATION_UPSET_THRESHOLD = 280_000;
+/**
+ * Skip re-valuation when Zillow was last fetched successfully within this window.
+ * Matches the Preview backend's ZILLOW_CACHE_DAYS = 7 in src/valuation.ts.
+ */
+const VALUATION_CACHE_DAYS = 7;
 
 // ─── Parser utilities ────────────────────────────────────────────────────────
 
@@ -1015,7 +1020,7 @@ async function upsertForeclosure(
   db: D1Database,
   county: string,
   detail: DetailedListing,
-  newValuation: { zillow: ValuationResult; redfin: ValuationResult } | null,
+  newValuation: { zillow: ValuationResult; redfin?: ValuationResult } | null,
   /** Existing row data fetched before this call — avoids an extra DB round-trip */
   existingRow: ExistingValuation | null,
 ): Promise<void> {
@@ -1073,8 +1078,13 @@ async function upsertForeclosure(
     occupancyStatus: detail.occupancyStatus,
   });
 
-  // Only update valuation_updated_at when new data was actually written
-  const valUpdatedAt = (newValuation && !newValuation.zillow.rateLimited && !newValuation.redfin.rateLimited)
+  // Only update valuation_updated_at when new data was actually written.
+  // redfin may be undefined (not fetched during sync — on-demand only, like Preview).
+  const valUpdatedAt = (
+    newValuation &&
+    !newValuation.zillow.rateLimited &&
+    (newValuation.redfin == null || !newValuation.redfin.rateLimited)
+  )
     ? now
     : existingRow ? undefined : null; // undefined = preserve in UPDATE, null = set null on INSERT
 
@@ -1300,20 +1310,32 @@ export async function runSync(countySlug: string, db: D1Database, env: FcEnv): P
     }
     detailsFetched++;
 
-    // Valuations — only for properties under the upset threshold with a valid address
-    let newValuation: { zillow: ValuationResult; redfin: ValuationResult } | null = null;
+    // Valuations — mirrors Preview's lookupValuation() 7-day cache (src/valuation.ts:74-87).
+    // Only Zillow is fetched automatically during sync; Redfin is on-demand only
+    // (same as Preview: refresh.ts never calls lookupRedfinValuation).
+    // Existing Redfin data is preserved via mergeValuation(undefined, existing).
+    let newValuation: { zillow: ValuationResult; redfin?: ValuationResult } | null = null;
+
+    const cacheThresholdMs = Date.now() - VALUATION_CACHE_DAYS * 86_400_000;
+    const recentlyValuated =
+      existingRow?.zillow_fetched_at != null &&
+      existingRow.zillow_status === "SUCCESS" &&
+      new Date(existingRow.zillow_fetched_at).getTime() > cacheThresholdMs;
+
     const needsValuation =
+      !recentlyValuated &&
       detail.address && detail.city &&
       detail.upsetAmount != null && detail.upsetAmount <= VALUATION_UPSET_THRESHOLD;
 
     if (needsValuation && detail.address && detail.city) {
       await sleep(500);
-      const [zillow, redfin] = await Promise.all([
-        fetchZillowEstimate(detail.address, detail.city, detail.state ?? "NJ", detail.zipCode ?? "", env),
-        fetchRedfinEstimate(detail.address, detail.city, detail.state ?? "NJ", detail.zipCode ?? "", env),
-      ]);
-      newValuation = { zillow, redfin };
-      if (zillow.estimate != null || redfin.estimate != null) valuated++;
+      const zillow = await fetchZillowEstimate(
+        detail.address, detail.city, detail.state ?? "NJ", detail.zipCode ?? "", env,
+      );
+      // Redfin is intentionally NOT called during sync — on-demand only via
+      // POST /api/foreclosures/listings/:sheriff/valuate (matches Preview behavior).
+      newValuation = { zillow };
+      if (zillow.estimate != null) valuated++;
     }
 
     try {
