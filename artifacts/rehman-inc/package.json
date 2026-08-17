@@ -9,7 +9,12 @@
     "serve": "vite preview --config vite.config.ts --host 0.0.0.0",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
+  "dependencies": {
+    "drizzle-orm": "catalog:",
+    "hono": "^4.7.0"
+  },
   "devDependencies": {
+    "@cloudflare/workers-types": "^4.20241224.0",
     "@hookform/resolvers": "^3.10.0",
     "@radix-ui/react-accordion": "^1.2.4",
     "@radix-ui/react-alert-dialog": "^1.1.7",

@@ -5,8 +5,9 @@ pages_build_output_dir = "./dist/public"
 # ============================================================
 # Cloudflare D1 Database
 # ============================================================
-# Create with: wrangler d1 create rehman-inc-db
-# Then apply schema: wrangler d1 execute rehman-inc-db --file=schema.sql
+# 1. Create:  wrangler d1 create rehman-inc-db
+# 2. Paste the database_id returned above into this file
+# 3. Apply schema: wrangler d1 execute rehman-inc-db --remote --file=schema.sql
 [[d1_databases]]
 binding = "DB"
 database_name = "rehman-inc-db"
@@ -21,15 +22,22 @@ binding = "PHOTOS"
 bucket_name = "rehman-inc-photos"
 
 # ============================================================
-# Environment Variables
+# Environment Variables (non-secret)
 # ============================================================
-# Set secrets with: wrangler secret put ADMIN_PASSWORD
-# Do NOT put secrets in this file
 [vars]
 ENVIRONMENT = "production"
 
 # ============================================================
-# Local Development Overrides
+# Secrets — set with wrangler secret put <NAME>
+# ============================================================
+# wrangler secret put RESEND_API_KEY
+# wrangler secret put RESEND_FROM_EMAIL
+# wrangler secret put INQUIRY_NOTIFICATION_EMAIL
+# wrangler secret put SESSION_SECRET
+# wrangler secret put ADMIN_PASSWORD
+
+# ============================================================
+# Local Development
 # ============================================================
 [dev]
 port = 8788
