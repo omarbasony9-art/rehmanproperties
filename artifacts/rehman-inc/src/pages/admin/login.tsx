@@ -37,7 +37,7 @@ export default function AdminLogin() {
       onError: (err) => {
         toast({
           title: "Access Denied",
-          description: err.error || "Invalid password",
+          description: (err.data as { error?: string } | null)?.error || "Invalid password",
           variant: "destructive"
         });
       }

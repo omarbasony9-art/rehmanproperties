@@ -20,19 +20,21 @@ export function Footer() {
           <div>
             <h4 className="font-bold mb-6 text-lg tracking-wide uppercase">Explore</h4>
             <ul className="space-y-4 text-background/80">
-              <li><a href="/#how-it-works" className="hover:text-secondary transition-colors">How It Works</a></li>
-              <li><a href="/#why-us" className="hover:text-secondary transition-colors">Why Us</a></li>
-              <li><a href="/#properties" className="hover:text-secondary transition-colors">Properties</a></li>
-              <li><a href="/#faq" className="hover:text-secondary transition-colors">FAQ</a></li>
+              <li><Link href="/sell-your-house" className="hover:text-secondary transition-colors block">Sell Your House</Link></li>
+              <li><Link href="/how-it-works" className="hover:text-secondary transition-colors block">How It Works</Link></li>
+              <li><Link href="/why-us" className="hover:text-secondary transition-colors block">Why Us</Link></li>
+              <li><Link href="/properties" className="hover:text-secondary transition-colors block">Properties</Link></li>
+              <li><Link href="/faq" className="hover:text-secondary transition-colors block">FAQ</Link></li>
+              <li><Link href="/contact" className="hover:text-secondary transition-colors block">Contact</Link></li>
             </ul>
           </div>
           
           <div>
             <h4 className="font-bold mb-6 text-lg tracking-wide uppercase">Legal</h4>
             <ul className="space-y-4 text-background/80">
-              <li><Link href="/privacy" className="hover:text-secondary transition-colors">Privacy Policy</Link></li>
-              <li><Link href="/terms" className="hover:text-secondary transition-colors">Terms of Service</Link></li>
-              <li><Link href="/admin" className="hover:text-secondary transition-colors">Admin Access</Link></li>
+              <li><Link href="/privacy" className="hover:text-secondary transition-colors block">Privacy Policy</Link></li>
+              <li><Link href="/terms" className="hover:text-secondary transition-colors block">Terms of Service</Link></li>
+              <li><Link href="/admin" className="hover:text-secondary transition-colors block">Admin Access</Link></li>
             </ul>
           </div>
         </div>
@@ -42,8 +44,7 @@ export function Footer() {
             &copy; {new Date().getFullYear()} Rehman INC. All rights reserved.
           </p>
           <div className="flex gap-6">
-            <span className="text-background/50 text-sm">Contact: info@rehman-inc.com</span>
-            <span className="text-background/50 text-sm">Phone: 1-800-555-0199</span>
+            <span className="text-background/50 text-sm">Contact: Aliproperties91@gmail.com</span>
           </div>
         </div>
       </div>

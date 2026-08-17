@@ -63,7 +63,7 @@ export default function PrivacyPage() {
 
           <h2 className="text-foreground font-serif">6. Contact Us</h2>
           <p>
-            If you have any questions regarding this privacy policy, you may contact us at info@rehman-inc.com.
+            If you have any questions regarding this privacy policy, you may contact us at Aliproperties91@gmail.com.
           </p>
         </div>
       </main>

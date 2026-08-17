@@ -1,4 +1,4 @@
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useState, useEffect } from "react";
 import { Menu, X, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 export function Navbar({ onOpenForm }: { onOpenForm: () => void }) {
   const [isScrolled, setIsScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [location] = useLocation();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -16,10 +17,13 @@ export function Navbar({ onOpenForm }: { onOpenForm: () => void }) {
   }, []);
 
   const navLinks = [
-    { name: "How It Works", href: "/#how-it-works" },
-    { name: "Why Us", href: "/#why-us" },
-    { name: "Properties", href: "/#properties" },
-    { name: "FAQ", href: "/#faq" },
+    { name: "Home", href: "/" },
+    { name: "Sell Your House", href: "/sell-your-house" },
+    { name: "How It Works", href: "/how-it-works" },
+    { name: "Why Us", href: "/why-us" },
+    { name: "Properties", href: "/properties" },
+    { name: "FAQ", href: "/faq" },
+    { name: "Contact", href: "/contact" },
   ];
 
   return (
@@ -33,25 +37,27 @@ export function Navbar({ onOpenForm }: { onOpenForm: () => void }) {
       <div className="container mx-auto px-4 md:px-6">
         <div className="flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2">
-            <span className="font-serif text-xl md:text-2xl font-bold tracking-wider uppercase">
+            <span className="font-serif text-xl md:text-2xl font-bold tracking-wider uppercase text-foreground">
               Rehman INC
             </span>
           </Link>
 
           {/* Desktop Nav */}
-          <nav className="hidden md:flex items-center gap-8">
+          <nav className="hidden lg:flex items-center gap-6">
             {navLinks.map((link) => (
-              <a
+              <Link
                 key={link.name}
                 href={link.href}
-                className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+                className={`text-sm font-medium transition-colors hover:text-primary ${
+                  location === link.href ? "text-primary font-semibold" : "text-foreground/80"
+                }`}
               >
                 {link.name}
-              </a>
+              </Link>
             ))}
           </nav>
 
-          <div className="hidden md:flex items-center">
+          <div className="hidden lg:flex items-center">
             <Button
               onClick={onOpenForm}
               className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold px-6 py-5 rounded-sm"
@@ -62,7 +68,7 @@ export function Navbar({ onOpenForm }: { onOpenForm: () => void }) {
 
           {/* Mobile Menu Toggle */}
           <button
-            className="md:hidden p-2 text-foreground"
+            className="lg:hidden p-2 text-foreground"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             aria-label="Toggle menu"
           >
@@ -73,26 +79,32 @@ export function Navbar({ onOpenForm }: { onOpenForm: () => void }) {
 
       {/* Mobile Nav */}
       {mobileMenuOpen && (
-        <div className="md:hidden absolute top-full left-0 w-full bg-background border-b border-border shadow-lg py-4 px-4 flex flex-col gap-4">
-          {navLinks.map((link) => (
-            <a
-              key={link.name}
-              href={link.href}
-              className="text-lg font-medium text-foreground py-2 border-b border-border/50"
-              onClick={() => setMobileMenuOpen(false)}
+        <div className="lg:hidden fixed inset-0 top-[72px] z-40 bg-background overflow-y-auto border-t border-border flex flex-col px-4 py-6 h-[calc(100vh-72px)]">
+          <div className="flex flex-col gap-2 flex-grow">
+            {navLinks.map((link) => (
+              <Link
+                key={link.name}
+                href={link.href}
+                className={`text-2xl font-serif py-4 border-b border-border/50 transition-colors block ${
+                  location === link.href ? "text-primary font-bold" : "text-foreground"
+                }`}
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                {link.name}
+              </Link>
+            ))}
+          </div>
+          <div className="mt-8 pb-8">
+            <Button
+              onClick={() => {
+                onOpenForm();
+                setMobileMenuOpen(false);
+              }}
+              className="w-full bg-primary text-primary-foreground py-6 text-xl font-serif h-auto"
             >
-              {link.name}
-            </a>
-          ))}
-          <Button
-            onClick={() => {
-              onOpenForm();
-              setMobileMenuOpen(false);
-            }}
-            className="mt-2 w-full bg-primary text-primary-foreground py-6 text-lg"
-          >
-            Get My Cash Offer
-          </Button>
+              Get My Cash Offer
+            </Button>
+          </div>
         </div>
       )}
     </header>

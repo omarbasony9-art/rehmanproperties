@@ -4,6 +4,8 @@ import { AdminLayout } from "@/components/layout/admin-layout";
 import { 
   useGetAdminStats, 
   useListAdminInquiries, 
+  getGetAdminStatsQueryKey,
+  getListAdminInquiriesQueryKey,
   ListAdminInquiriesStatus,
   InquiryStatus,
   useGetAdminMe
@@ -51,18 +53,19 @@ export default function AdminDashboard() {
   const limit = 10;
   
   const { data: stats, isLoading: statsLoading } = useGetAdminStats({
-    query: { enabled: !!me?.authenticated }
+    query: { queryKey: getGetAdminStatsQueryKey(), enabled: !!me?.authenticated }
   });
-  
-  const { data: listData, isLoading: listLoading } = useListAdminInquiries({
+
+  const listParams = {
     search: search || undefined,
     status: statusFilter === "all" ? undefined : statusFilter,
     page,
     limit,
-    sortBy: "created_at",
-    sortDir: "desc"
-  }, {
-    query: { enabled: !!me?.authenticated }
+    sortBy: "created_at" as const,
+    sortDir: "desc" as const,
+  };
+  const { data: listData, isLoading: listLoading } = useListAdminInquiries(listParams, {
+    query: { queryKey: getListAdminInquiriesQueryKey(listParams), enabled: !!me?.authenticated }
   });
 
   if (meLoading) {

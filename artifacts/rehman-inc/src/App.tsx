@@ -12,19 +12,33 @@ import {
 } from 'wouter';
 
 import HomePage from '@/pages/home';
+import HowItWorksPage from '@/pages/how-it-works';
+import SellYourHousePage from '@/pages/sell-your-house';
+import WhyUsPage from '@/pages/why-us';
+import PropertiesPage from '@/pages/properties';
+import FaqPage from '@/pages/faq';
+import ContactPage from '@/pages/contact';
 import PrivacyPage from '@/pages/privacy';
 import TermsPage from '@/pages/terms';
 import AdminLogin from '@/pages/admin/login';
 import AdminDashboard from '@/pages/admin/dashboard';
 import AdminInquiryDetail from '@/pages/admin/inquiry';
+import { ScrollToTop } from '@/components/scroll-to-top';
 
 const queryClient = new QueryClient();
 
 function Router() {
   return (
     <RoutedErrorBoundary>
+      <ScrollToTop />
       <Switch>
         <Route path="/" component={HomePage} />
+        <Route path="/how-it-works" component={HowItWorksPage} />
+        <Route path="/sell-your-house" component={SellYourHousePage} />
+        <Route path="/why-us" component={WhyUsPage} />
+        <Route path="/properties" component={PropertiesPage} />
+        <Route path="/faq" component={FaqPage} />
+        <Route path="/contact" component={ContactPage} />
         <Route path="/privacy" component={PrivacyPage} />
         <Route path="/terms" component={TermsPage} />
         <Route path="/admin" component={AdminLogin} />
