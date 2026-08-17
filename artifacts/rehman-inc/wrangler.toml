@@ -11,15 +11,16 @@ pages_build_output_dir = "./dist/public"
 [[d1_databases]]
 binding = "DB"
 database_name = "rehman-inc-db"
-database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+database_id = "a06cad3c-b5a7-4ff7-b090-b6da7506ff3e"
 
 # ============================================================
-# Cloudflare R2 Object Storage (property photos)
+# R2 Object Storage — NOT ENABLED
+# Uncomment below and run `wrangler r2 bucket create rehman-inc-photos`
+# if you want to enable property photo uploads in the future.
 # ============================================================
-# Create bucket: wrangler r2 bucket create rehman-inc-photos
-[[r2_buckets]]
-binding = "PHOTOS"
-bucket_name = "rehman-inc-photos"
+# [[r2_buckets]]
+# binding = "PHOTOS"
+# bucket_name = "rehman-inc-photos"
 
 # ============================================================
 # Environment Variables (non-secret)

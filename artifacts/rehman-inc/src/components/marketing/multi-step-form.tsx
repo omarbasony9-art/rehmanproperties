@@ -102,6 +102,8 @@ export function MultiStepForm({
     
     const newKeys: string[] = [];
     
+    let uploadsDisabled = false;
+
     for (const file of newFiles) {
       try {
         const mimeType = file.type === "image/jpeg" || file.type === "image/png" || file.type === "image/webp" 
@@ -112,17 +114,27 @@ export function MultiStepForm({
           data: { filename: file.name, mimeType }
         });
         
-        // Try to upload to R2 (will fail in dev if no R2 setup, but we still keep the key)
+        // Upload the file to the returned URL
         try {
           await fetch(uploadUrl, { method: "PUT", body: file, headers: { "Content-Type": file.type } });
         } catch (err) {
-          console.warn("Upload failed (likely dev environment)", err);
+          console.warn("Photo upload failed:", err);
         }
         
         newKeys.push(objectKey);
-      } catch (err) {
-        toast({ title: "Upload warning", description: "Some photos couldn't be processed. We'll proceed anyway." });
+      } catch (err: unknown) {
+        // 503 means photo uploads are disabled server-side — skip silently
+        const is503 = err && typeof err === "object" && "status" in err && (err as { status?: number }).status === 503;
+        if (!is503 && !uploadsDisabled) {
+          console.warn("Photo upload skipped:", err);
+        }
+        uploadsDisabled = true;
       }
+    }
+
+    // If uploads are disabled, clear the locally-staged files so the form stays clean
+    if (uploadsDisabled && newKeys.length === 0) {
+      setPhotos([]);
     }
     
     setPhotoKeys([...photoKeys, ...newKeys]);

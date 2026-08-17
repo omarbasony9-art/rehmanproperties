@@ -17,7 +17,7 @@ import { sendInquiryEmail } from "../_email";
 
 type Env = {
   DB: D1Database;
-  PHOTOS: R2Bucket;
+  PHOTOS?: R2Bucket; // optional — R2 not required; photo uploads gracefully disabled when absent
   RESEND_API_KEY?: string;
   RESEND_FROM_EMAIL?: string;
   INQUIRY_NOTIFICATION_EMAIL?: string;
@@ -662,23 +662,21 @@ app.get("/admin/inquiry-photos/:id", async (c) => {
   const db = getDb(c.env);
   const photos = await db.select().from(propertyPhotosTable)
     .where(eq(propertyPhotosTable.inquiryId, id));
-  // Photos served via /api/photos/:key endpoint below
+  // When R2 is not configured, photo URLs won't resolve — that's expected
   const origin = new URL(c.req.url).origin;
   return c.json(photos.map((p) => ({
     ...p,
-    url: `${origin}/api/photos/${p.objectKey}`,
+    url: c.env.PHOTOS ? `${origin}/api/photos/${p.objectKey}` : null,
   })));
 });
 
 // ══════════════════════════════════════════════════════════════════════════
-// R2 UPLOAD — direct upload proxy (PUT /api/r2-upload?key=...)
-// Frontend first gets a key from /api/inquiries/upload-url,
-// then PUTs the file here. No S3 signing needed.
+// R2 UPLOAD — optional. Endpoints return 503 when R2 binding is absent.
 // ══════════════════════════════════════════════════════════════════════════
 
 app.put("/r2-upload", async (c) => {
+  if (!c.env.PHOTOS) return c.json({ error: "Photo storage is not configured." }, 503);
   const key = c.req.query("key");
-  // Validate: must start with "photos/"
   if (!key || !key.startsWith("photos/") || key.includes("..")) {
     return c.json({ error: "Invalid key." }, 400);
   }
@@ -695,8 +693,9 @@ app.put("/r2-upload", async (c) => {
   return c.json({ success: true });
 });
 
-// Serve R2 photos (private access through function)
+// Serve R2 photos — returns 404 when R2 binding is absent
 app.get("/photos/*", async (c) => {
+  if (!c.env.PHOTOS) return c.json({ error: "Not found." }, 404);
   const key = c.req.param("*");
   if (!key) return c.json({ error: "Not found." }, 404);
   const obj = await c.env.PHOTOS.get(key);
@@ -727,6 +726,11 @@ function checkRateLimit(ip: string): boolean {
 }
 
 app.post("/inquiries/upload-url", async (c) => {
+  // Photo uploads are disabled when R2 is not configured
+  if (!c.env.PHOTOS) {
+    return c.json({ error: "Photo uploads are not available." }, 503);
+  }
+
   let body: Record<string, unknown>;
   try { body = await c.req.json(); } catch { body = {}; }
 
