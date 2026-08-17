@@ -52,13 +52,17 @@ export async function fetchRedfinEstimate(
     "Accept":          "application/json",
   };
 
-  // Build cascading address candidates (same NJ suffix strategy as Zillow)
-  const strippedCity = city.replace(/\s+(Township|Twp|Borough|Boro|City|Village|Town)$/i, "").trim();
-  const candidates = [
-    `${street}, ${city}, ${state} ${zip}`,
-    ...(strippedCity !== city ? [`${street}, ${strippedCity}, ${state} ${zip}`] : []),
-    `${street}, ${state} ${zip}`,
-  ];
+  // Build cascading address candidates with progressive simplification
+  const noParens     = city.replace(/\s*\([^)]*\)\s*/g, "").trim();
+  const strippedCity = noParens.replace(/\s+(Township|Twp|Borough|Boro|City|Village|Town)$/i, "").trim();
+  const seen = new Set<string>();
+  const candidates: string[] = [];
+  for (const c of [city, noParens, strippedCity]) {
+    const q = `${street}, ${c}, ${state} ${zip}`;
+    if (!seen.has(q)) { seen.add(q); candidates.push(q); }
+  }
+  const shortQ = `${street}, ${state} ${zip}`;
+  if (!seen.has(shortQ)) candidates.push(shortQ);
 
   try {
     // ── Step 1: address → Redfin URL ─────────────────────────────────────────

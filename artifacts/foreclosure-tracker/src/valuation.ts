@@ -53,7 +53,7 @@ export async function lookupValuation(
   state: string,
   zip: string,
   force = false,
-): Promise<"fetched" | "cached" | "skipped" | "error"> {
+): Promise<"fetched" | "cached" | "skipped" | "error" | "rate_limited"> {
   const apiKey = process.env["ZILLOW_RAPIDAPI_KEY"];
   if (!apiKey) {
     // No Zillow credentials — update status and exit cleanly
@@ -82,6 +82,9 @@ export async function lookupValuation(
 
   try {
     const result = await fetchZillowEstimate(address, city, state, zip);
+
+    // Rate limited — do NOT persist ERROR to DB; leave row untouched for next run
+    if (result.rateLimited) return "rate_limited";
 
     await query(
       `UPDATE foreclosures SET
@@ -265,12 +268,15 @@ export async function runBulkZillowRefresh(force = false, noThreshold = false): 
     const outcome = await lookupValuation(
       prop.sheriff_number, prop.address, prop.city, prop.state, prop.zip_code, force,
     );
-    if (outcome === "fetched")  stats.fetched++;
-    else if (outcome === "cached")  stats.cached++;
-    else if (outcome === "error")   stats.errors++;
-    else                            stats.skipped++;
-    // Small delay to avoid rate limits
-    await sleep(300);
+    if (outcome === "fetched")        stats.fetched++;
+    else if (outcome === "cached")    stats.cached++;
+    else if (outcome === "rate_limited") {
+      console.warn("[valuations/refresh] Zillow rate limit hit — stopping early to preserve DB state");
+      break;
+    }
+    else if (outcome === "error")     stats.errors++;
+    else                              stats.skipped++;
+    await sleep(400); // short delay between properties
   }
 
   return stats;

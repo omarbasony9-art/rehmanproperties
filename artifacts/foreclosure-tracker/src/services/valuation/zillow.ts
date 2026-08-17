@@ -18,6 +18,7 @@ export type ZillowStatus = "SUCCESS" | "NOT_FOUND" | "NOT_CONFIGURED" | "ERROR";
 export interface ZillowResult {
   estimate: number | null;
   status: ZillowStatus;
+  rateLimited?: boolean; // true on HTTP 429 — do NOT write ERROR to DB
   source: "ZILLOW";
   propertyUrl: string | null;
   fetchedAt: Date;
@@ -39,13 +40,21 @@ export async function fetchZillowEstimate(
     Accept:            "application/json",
   };
 
-  // Build candidate queries: full → stripped city → street+zip only
-  const strippedCity = city.replace(/\s+(Township|Twp|Borough|Boro|City|Village|Town)$/i, "").trim();
-  const addressCandidates = [
-    `${street}, ${city}, ${state} ${zip}`,
-    ...(strippedCity !== city ? [`${street}, ${strippedCity}, ${state} ${zip}`] : []),
-    `${street}, ${state} ${zip}`,
-  ];
+  // Build candidate queries with progressive city simplification:
+  //   1. Full address as-is
+  //   2. Strip parenthetical qualifiers: "Absecon (Galloway Twp.)" → "Absecon"
+  //   3. Strip trailing NJ municipality suffixes: "Hamilton Township" → "Hamilton"
+  //   4. Street + state + zip only (no city)
+  const noParens    = city.replace(/\s*\([^)]*\)\s*/g, "").trim();
+  const strippedCity = noParens.replace(/\s+(Township|Twp|Borough|Boro|City|Village|Town)$/i, "").trim();
+  const seen = new Set<string>();
+  const addressCandidates: string[] = [];
+  for (const c of [city, noParens, strippedCity]) {
+    const q = `${street}, ${c}, ${state} ${zip}`;
+    if (!seen.has(q)) { seen.add(q); addressCandidates.push(q); }
+  }
+  const shortQ = `${street}, ${state} ${zip}`;
+  if (!seen.has(shortQ)) addressCandidates.push(shortQ);
 
   try {
     // ── Step 1: address → ZPID (try candidates in order) ───────────────────
@@ -57,7 +66,7 @@ export async function fetchZillowEstimate(
 
       if (!acResp.ok) {
         console.warn(`[zillow] autocomplete HTTP ${acResp.status} for "${query}"`);
-        if (acResp.status === 429) return error(); // rate limit — stop immediately
+        if (acResp.status === 429) return rateLimited(); // rate limit — stop immediately
         continue;
       }
 
@@ -86,11 +95,24 @@ export async function fetchZillowEstimate(
 
     const detail = await detailResp.json() as Record<string, unknown>;
 
-    // Only accept the `zestimate` field — never Price, lastSoldPrice, etc.
-    const zestimate = numOrNull(detail["zestimate"]);
+    // Prefer the explicit Zestimate field.  For many distressed/foreclosed
+    // properties the private-zillow API returns zestimate=null but still
+    // populates the "Price" field with Zillow's valuation estimate.
+    // Use Price as a fallback, but only when it looks like a real home value
+    // (> $50 000) to avoid picking up tax-assessed or lien amounts.
+    const MIN_HOME_VALUE = 50_000;
+    const rawZestimate = numOrNull(detail["zestimate"]);
+    const rawPrice     = numOrNull(detail["Price"]);
+    const zestimate    = rawZestimate ?? (rawPrice != null && rawPrice >= MIN_HOME_VALUE ? rawPrice : null);
+
     if (zestimate == null) {
-      console.warn(`[zillow] No Zestimate for zpid=${zpid} ("${addressCandidates[0]}")`);
+      console.warn(`[zillow] No valuation for zpid=${zpid} ("${addressCandidates[0]}") zestimate=${rawZestimate} price=${rawPrice}`);
       return notFound();
+    }
+
+    const usedField = rawZestimate != null ? "zestimate" : "Price";
+    if (usedField === "Price") {
+      console.log(`[zillow] Using Price field (zestimate null) for zpid=${zpid}`);
     }
 
     // PropertyZillowURL is already a full URL (no prefix needed)
@@ -123,6 +145,9 @@ function notFound(): ZillowResult {
 }
 function error(): ZillowResult {
   return { estimate: null, status: "ERROR",          source: "ZILLOW", propertyUrl: null, fetchedAt: new Date() };
+}
+function rateLimited(): ZillowResult {
+  return { estimate: null, status: "ERROR", rateLimited: true, source: "ZILLOW", propertyUrl: null, fetchedAt: new Date() };
 }
 
 function numOrNull(v: unknown): number | null {
