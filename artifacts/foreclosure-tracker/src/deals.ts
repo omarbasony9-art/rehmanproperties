@@ -127,8 +127,13 @@ export function computeWarnings(opts: {
   // Missing data
   if (!opts.upsetAmount)         warnings.add("MISSING_UPSET_AMOUNT");
   if (!opts.marketValueUsed)     warnings.add("MARKET_VALUE_UNKNOWN");
-  if (opts.zillowStatus !== "SUCCESS")  warnings.add("NO_ZILLOW_ESTIMATE");
-  if (opts.redfinStatus !== "SUCCESS")  warnings.add("NO_REDFIN_ESTIMATE");
+  // Only flag missing estimates when the provider IS configured (configured but no value = actionable)
+  if (opts.zillowStatus && opts.zillowStatus !== "SUCCESS" && opts.zillowStatus !== "NOT_CONFIGURED") {
+    warnings.add("NO_ZILLOW_ESTIMATE");
+  }
+  if (opts.redfinStatus && opts.redfinStatus !== "SUCCESS" && opts.redfinStatus !== "NOT_CONFIGURED") {
+    warnings.add("NO_REDFIN_ESTIMATE");
+  }
 
   // Stale Zillow (> 7 days old)
   if (opts.zillowStatus === "SUCCESS" && opts.zillowFetchedAt) {
