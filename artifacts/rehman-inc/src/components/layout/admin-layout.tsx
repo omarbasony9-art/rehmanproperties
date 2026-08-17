@@ -3,8 +3,8 @@ import { useAdminLogout, useGetAdminMe } from "@workspace/api-client-react";
 import {
   LogOut, LayoutDashboard, Building2, Loader2,
   FileText, HelpCircle, Phone, Image, Search, Share2,
-  SlidersHorizontal, ShieldCheck, ExternalLink, ClipboardList,
-  History, Menu,
+  SlidersHorizontal, ShieldCheck, ClipboardList,
+  History, Menu, House,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -44,7 +44,17 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
   }
 
   const handleLogout = () => {
-    logout.mutate(undefined, { onSuccess: () => setLocation("/admin") });
+    logout.mutate(undefined, {
+      onSuccess: () => {
+        window.scrollTo(0, 0);
+        setLocation("/");
+      },
+    });
+  };
+
+  const handleExitAdmin = () => {
+    window.scrollTo(0, 0);
+    setLocation("/");
   };
 
   const SidebarContent = () => (
@@ -74,29 +84,29 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
           </Link>
         ))}
 
-        <div className="pt-2 border-t border-border mt-2">
-          <a
-            href="/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-          >
-            <ExternalLink className="w-4 h-4 shrink-0" />
-            View Live Site
-          </a>
-        </div>
       </nav>
 
-      <div className="p-3 border-t border-border shrink-0">
+      <div className="p-3 border-t border-border shrink-0 space-y-1">
+        {/* Exit Admin — leaves admin, goes to public homepage, session stays active */}
         <Button
           variant="ghost"
-          className="w-full justify-start text-muted-foreground hover:text-foreground"
+          className="w-full justify-start text-muted-foreground hover:text-foreground hover:bg-accent"
+          onClick={handleExitAdmin}
+        >
+          <House className="w-4 h-4 mr-2 shrink-0" />
+          Exit Admin
+        </Button>
+
+        {/* Sign Out — ends session, then goes to public homepage */}
+        <Button
+          variant="ghost"
+          className="w-full justify-start text-muted-foreground hover:text-destructive hover:bg-destructive/10"
           onClick={handleLogout}
           disabled={logout.isPending}
         >
           {logout.isPending
             ? <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-            : <LogOut className="w-4 h-4 mr-2" />}
+            : <LogOut className="w-4 h-4 mr-2 shrink-0" />}
           Sign Out
         </Button>
       </div>
@@ -121,7 +131,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
       {mobileOpen && (
         <div className="md:hidden fixed inset-0 z-50 flex">
           <div className="w-72 bg-background border-r border-border flex flex-col shadow-xl">
-            <SidebarContent />
+            {SidebarContent()}
           </div>
           <div className="flex-1 bg-black/40" onClick={() => setMobileOpen(false)} />
         </div>
@@ -129,7 +139,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
 
       {/* Desktop sidebar */}
       <aside className="hidden md:flex w-64 bg-background border-r border-border flex-col shrink-0 h-screen sticky top-0">
-        <SidebarContent />
+        {SidebarContent()}
       </aside>
 
       {/* Main content */}

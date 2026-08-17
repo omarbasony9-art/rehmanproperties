@@ -71,13 +71,6 @@ export default function AdminSettings() {
           <p className="text-muted-foreground text-sm mt-1">Core company information and website configuration.</p>
         </div>
 
-        <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4 mb-6 flex gap-3">
-          <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-          <p className="text-sm text-amber-800 dark:text-amber-300">
-            <strong>Note:</strong> Infrastructure secrets (RESEND_API_KEY, SESSION_SECRET, database credentials) are managed in Replit environment variables and are not shown here.
-          </p>
-        </div>
-
         {isLoading ? (
           <div className="flex items-center justify-center py-20"><Loader2 className="w-6 h-6 animate-spin" /></div>
         ) : (
