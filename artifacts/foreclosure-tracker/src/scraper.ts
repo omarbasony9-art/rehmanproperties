@@ -1,11 +1,13 @@
 /**
  * CivilView scraper — HTTP + Cheerio only (no Playwright/Puppeteer).
  *
- * Source: https://salesweb.civilview.com/Sales/SalesSearch?countyId=25
+ * Supports multiple counties via countyId parameter:
+ *   Atlantic County:  countyId=25   (https://salesweb.civilview.com/Sales/SalesSearch?countyId=25)
+ *   Cape May County:  countyId=52   (https://salesweb.civilview.com/Sales/SalesSearch?countyId=52)
  *
  * IMPORTANT: Detail pages require ASP.NET session cookies that are set by the
  * list page response.  `fetchListPage()` captures those cookies and stores them
- * in `_sessionCookies`; all subsequent `fetchDetailPage()` calls send them
+ * keyed by countyId; all subsequent `fetchDetailPage()` calls send them
  * automatically.
  */
 
@@ -13,14 +15,17 @@ import * as cheerio from "cheerio";
 import { parseMoney, parseDate, latestDate, buildGoogleMapsUrl, buildZillowUrl } from "./parser.js";
 
 const CIVILVIEW_BASE = "https://salesweb.civilview.com";
-const LIST_URL = `${CIVILVIEW_BASE}/Sales/SalesSearch?countyId=25`;
+
+function listUrl(countyId: number): string {
+  return `${CIVILVIEW_BASE}/Sales/SalesSearch?countyId=${countyId}`;
+}
 
 const USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
 
-// Session cookies captured from the list-page response.
+// Session cookies captured from the list-page response, keyed by countyId.
 // Detail pages return HTTP 302 without a valid session.
-let _sessionCookies = "";
+const _sessionCookies: Record<number, string> = {};
 
 // ─── HTTP helpers ──────────────────────────────────────────────────────────
 
@@ -131,15 +136,18 @@ export interface DetailedListing {
  *   3  Plaintiff            ← may be truncated with "..."
  *   4  Defendant            ← may be truncated with "..."
  *   5  Address              ← full address string
+ *
+ * @param countyId  CivilView county ID (25 = Atlantic, 52 = Cape May)
  */
-export async function fetchListPage(): Promise<ListingStub[]> {
-  // Capture session cookies from the list-page response
-  const extra: Record<string, string> = {};
-  const resp = await fetch(LIST_URL, { headers: buildHeaders(extra), redirect: "follow" });
-  if (!resp.ok) throw new Error(`HTTP ${resp.status} fetching list page`);
+export async function fetchListPage(countyId = 25): Promise<ListingStub[]> {
+  const url = listUrl(countyId);
 
-  // Store session cookies for detail-page fetches
-  _sessionCookies = extractSetCookies(resp.headers);
+  // Capture session cookies from the list-page response
+  const resp = await fetch(url, { headers: buildHeaders(), redirect: "follow" });
+  if (!resp.ok) throw new Error(`HTTP ${resp.status} fetching list page (countyId=${countyId})`);
+
+  // Store session cookies keyed by countyId for detail-page fetches
+  _sessionCookies[countyId] = extractSetCookies(resp.headers);
 
   const html = await resp.text();
   const $ = cheerio.load(html);
@@ -190,8 +198,8 @@ export async function fetchListPage(): Promise<ListingStub[]> {
   });
 
   console.log(
-    `[scraper] List page: ${stubs.length} stubs, ` +
-    `cookies captured: ${_sessionCookies ? "yes" : "no"}`,
+    `[scraper] countyId=${countyId} list page: ${stubs.length} stubs, ` +
+    `cookies captured: ${_sessionCookies[countyId] ? "yes" : "no"}`,
   );
   return stubs;
 }
@@ -205,6 +213,8 @@ export async function fetchListPage(): Promise<ListingStub[]> {
  *
  * Uses `for...of` over `.toArray()` to avoid Cheerio `.each()` callback return-type
  * issues with TypeScript strict mode.
+ *
+ * @param countyId  Must match the county used in `fetchListPage` so the right session cookie is sent.
  */
 function makeValueFinder($: ReturnType<typeof cheerio.load>) {
   return function findValue(label: RegExp): string | null {
@@ -274,13 +284,13 @@ function parseAddressHtml(
   return { streetAddress, city, state, zipCode };
 }
 
-export async function fetchDetailPage(detailUrl: string): Promise<DetailedListing | null> {
+export async function fetchDetailPage(detailUrl: string, countyId = 25): Promise<DetailedListing | null> {
+  const cookies = _sessionCookies[countyId] ?? "";
+  const referer = listUrl(countyId);
+
   let html: string;
   try {
-    html = await fetchHtml(detailUrl, {
-      cookies: _sessionCookies,
-      referer: LIST_URL,
-    });
+    html = await fetchHtml(detailUrl, { cookies, referer });
   } catch (err) {
     console.error(`[scraper] Failed to fetch detail page ${detailUrl}:`, err);
     return null;
@@ -290,8 +300,6 @@ export async function fetchDetailPage(detailUrl: string): Promise<DetailedListin
   const findValue = makeValueFinder($);
 
   // ── Address ──────────────────────────────────────────────────────────────
-  // Use for...of to avoid TypeScript strict-mode issues with mutation inside
-  // .each() closures (type narrowing breaks on let variables assigned in closures).
   const addrResult = { streetAddress: null as string | null, city: null as string | null, state: null as string | null, zipCode: null as string | null };
   for (const item of $(".sale-detail-item").toArray()) {
     if (/address/i.test($(item).find(".sale-detail-label").text())) {

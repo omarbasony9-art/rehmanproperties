@@ -2,6 +2,11 @@
  * Smart refresh — scrape CivilView, diff against stored records,
  * only re-fetch detail pages when necessary.
  *
+ * Supports multiple counties:
+ *   runRefresh("Atlantic")  — countyId=25 (default)
+ *   runRefresh("Cape May")  — countyId=52
+ *   runAllRefresh()         — both counties in sequence
+ *
  * Valuation threshold: only properties with upsetAmount <= $280k are valued
  * automatically. Use POST /api/foreclosures/:id/valuation for others.
  */
@@ -18,6 +23,12 @@ const DELAY_MS = 200;
 const RECHECK_HOURS = 24;
 const VALUATION_UPSET_THRESHOLD = 280_000;
 
+/** Map county name → CivilView countyId */
+const COUNTY_IDS: Record<string, number> = {
+  "Atlantic": 25,
+  "Cape May": 52,
+};
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -25,6 +36,7 @@ function sleep(ms: number): Promise<void> {
 interface StoredStub {
   permanentlyExcluded: boolean;
   sheriffNumber: string;
+  county: string;
   currentSaleDate: string | null;
   lastDetailCheck: Date | null;
   isRemoved: boolean;
@@ -46,7 +58,17 @@ export interface RefreshResult {
   numberFailed: number;
 }
 
-export async function runRefresh(): Promise<RefreshResult> {
+/**
+ * Refresh a single county's listings.
+ *
+ * @param county  "Atlantic" | "Cape May" (must be a key in COUNTY_IDS)
+ */
+export async function runRefresh(county = "Atlantic"): Promise<RefreshResult> {
+  const countyId = COUNTY_IDS[county];
+  if (countyId == null) {
+    throw new Error(`Unknown county: "${county}". Valid values: ${Object.keys(COUNTY_IDS).join(", ")}`);
+  }
+
   const result: RefreshResult = {
     civilViewRowsFound: 0,
     detailSucceeded:    0,
@@ -64,37 +86,42 @@ export async function runRefresh(): Promise<RefreshResult> {
 
   let stubs: ListingStub[];
   try {
-    stubs = await fetchListPage();
+    stubs = await fetchListPage(countyId);
   } catch (err) {
-    result.error = `Failed to fetch list page: ${err instanceof Error ? err.message : String(err)}`;
+    result.error = `Failed to fetch list page (${county}): ${err instanceof Error ? err.message : String(err)}`;
     console.error("[refresh]", result.error);
     return result;
   }
 
   result.civilViewRowsFound = stubs.length;
   result.numberFound        = stubs.length;
-  console.log(`[refresh] CivilView rows found: ${stubs.length}`);
+  console.log(`[refresh] ${county} — CivilView rows found: ${stubs.length}`);
 
+  // Only load records for this county to keep the diff county-scoped
   const existing = await query<StoredStub>(
     `SELECT sheriff_number as "sheriffNumber",
+            county,
             current_sale_date as "currentSaleDate",
             last_detail_check as "lastDetailCheck",
             is_removed as "isRemoved",
             COALESCE(permanently_excluded, FALSE) as "permanentlyExcluded"
-     FROM foreclosures`,
+     FROM foreclosures
+     WHERE county = $1`,
+    [county],
   );
 
   const existingMap  = new Map<string, StoredStub>(existing.map((r) => [r.sheriffNumber, r]));
   const activeInList = new Set(stubs.map((s) => s.sheriffNumber));
 
-  // Mark removed properties (skip permanently_excluded — they stay hidden regardless)
+  // Mark removed properties for THIS county only (don't touch the other county's records)
   for (const stored of existing) {
     if (!activeInList.has(stored.sheriffNumber) && !stored.isRemoved && !stored.permanentlyExcluded) {
       await query(
-        `UPDATE foreclosures SET is_removed=TRUE, last_changed=NOW() WHERE sheriff_number=$1`,
-        [stored.sheriffNumber],
+        `UPDATE foreclosures SET is_removed=TRUE, last_changed=NOW()
+         WHERE sheriff_number=$1 AND county=$2`,
+        [stored.sheriffNumber, county],
       );
-      console.log(`[refresh] Marked ${stored.sheriffNumber} as removed`);
+      console.log(`[refresh] Marked ${stored.sheriffNumber} (${county}) as removed`);
     }
   }
 
@@ -106,18 +133,18 @@ export async function runRefresh(): Promise<RefreshResult> {
 
       try {
         if (needsDetail) {
-          const detail = await fetchDetailPage(stub.detailUrl);
+          const detail = await fetchDetailPage(stub.detailUrl, countyId);
 
           if (!detail || !detail.sheriffNumber) {
-            console.warn(`[refresh] Detail failed for ${stub.sheriffNumber} — saving stub`);
-            await upsertStub(stub, !!stored);
+            console.warn(`[refresh] Detail failed for ${stub.sheriffNumber} (${county}) — saving stub`);
+            await upsertStub(stub, !!stored, county);
             result.detailFailed++;
             result.numberFailed++;
             return;
           }
 
           const isNew = !stored;
-          await upsertForeclosure(detail, isNew);
+          await upsertForeclosure(detail, isNew, county);
 
           if (isNew) { result.dbInserts++; result.numberNew++; }
           else        { result.dbUpdates++; result.numberUpdated++; }
@@ -137,8 +164,8 @@ export async function runRefresh(): Promise<RefreshResult> {
               if (outcome === "fetched") {
                 // Check if it became a watchlist deal after scoring
                 const [scored] = await query<{ deal_rating: string }>(
-                  `SELECT deal_rating FROM foreclosures WHERE sheriff_number=$1`,
-                  [detail.sheriffNumber],
+                  `SELECT deal_rating FROM foreclosures WHERE sheriff_number=$1 AND county=$2`,
+                  [detail.sheriffNumber, county],
                 );
                 if (scored && ["EXTREME","MAJOR","STRONG"].includes(scored.deal_rating)) {
                   result.majorDealsFound++;
@@ -150,15 +177,15 @@ export async function runRefresh(): Promise<RefreshResult> {
           }
         } else {
           await query(
-            `UPDATE foreclosures SET last_seen=NOW() WHERE sheriff_number=$1`,
-            [stub.sheriffNumber],
+            `UPDATE foreclosures SET last_seen=NOW() WHERE sheriff_number=$1 AND county=$2`,
+            [stub.sheriffNumber, county],
           );
           result.dbUpdates++;
           result.numberUpdated++;
         }
       } catch (err) {
-        console.error(`[refresh] Error processing ${stub.sheriffNumber}:`, err);
-        try { await upsertStub(stub, !!stored); } catch { /* ignore */ }
+        console.error(`[refresh] Error processing ${stub.sheriffNumber} (${county}):`, err);
+        try { await upsertStub(stub, !!stored, county); } catch { /* ignore */ }
         result.detailFailed++;
         result.numberFailed++;
       }
@@ -173,7 +200,7 @@ export async function runRefresh(): Promise<RefreshResult> {
   result.totalActiveInDb = parseInt(countRow?.cnt ?? "0");
 
   console.log(
-    `[refresh] Done — ` +
+    `[refresh] ${county} done — ` +
     `found:${result.civilViewRowsFound} ` +
     `detailOK:${result.detailSucceeded} ` +
     `detailFailed:${result.detailFailed} ` +
@@ -183,6 +210,36 @@ export async function runRefresh(): Promise<RefreshResult> {
     `deals:${result.majorDealsFound}`,
   );
   return result;
+}
+
+/**
+ * Refresh all known counties in sequence (Atlantic → Cape May).
+ * Returns combined stats.
+ */
+export async function runAllRefresh(): Promise<RefreshResult> {
+  const combined: RefreshResult = {
+    civilViewRowsFound: 0, detailSucceeded: 0, detailFailed: 0,
+    dbInserts: 0, dbUpdates: 0, totalActiveInDb: 0, majorDealsFound: 0,
+    error: null, numberFound: 0, numberNew: 0, numberUpdated: 0, numberFailed: 0,
+  };
+
+  for (const county of Object.keys(COUNTY_IDS)) {
+    const r = await runRefresh(county);
+    combined.civilViewRowsFound += r.civilViewRowsFound;
+    combined.detailSucceeded    += r.detailSucceeded;
+    combined.detailFailed       += r.detailFailed;
+    combined.dbInserts          += r.dbInserts;
+    combined.dbUpdates          += r.dbUpdates;
+    combined.totalActiveInDb     = r.totalActiveInDb; // final value = last run's count
+    combined.majorDealsFound    += r.majorDealsFound;
+    combined.numberFound        += r.numberFound;
+    combined.numberNew          += r.numberNew;
+    combined.numberUpdated      += r.numberUpdated;
+    combined.numberFailed       += r.numberFailed;
+    if (r.error) combined.error = (combined.error ? combined.error + "; " : "") + r.error;
+  }
+
+  return combined;
 }
 
 function shouldFetchDetail(
@@ -210,31 +267,31 @@ function parseAddressString(raw: string | null) {
   return { street: street || null, city, state, zip };
 }
 
-async function upsertStub(stub: ListingStub, exists: boolean): Promise<void> {
+async function upsertStub(stub: ListingStub, exists: boolean, county: string): Promise<void> {
   if (exists) {
     await query(
       `UPDATE foreclosures SET
          current_sale_date=COALESCE($2, current_sale_date),
          last_seen=NOW(), detail_url=$3
-       WHERE sheriff_number=$1`,
-      [stub.sheriffNumber, stub.saleDate, stub.detailUrl],
+       WHERE sheriff_number=$1 AND county=$4`,
+      [stub.sheriffNumber, stub.saleDate, stub.detailUrl, county],
     );
   } else {
     const addr = parseAddressString(stub.address);
     await query(
       `INSERT INTO foreclosures (
-         sheriff_number, current_sale_date, plaintiff, defendant,
+         sheriff_number, county, current_sale_date, plaintiff, defendant,
          address, city, state, zip_code, detail_url,
          deal_rating, deal_warnings,
          first_seen, last_seen, last_changed, last_updated
        ) VALUES (
-         $1,$2,$3,$4,$5,$6,$7,$8,$9,
+         $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
          'UNKNOWN','{}',
          NOW(),NOW(),NOW(),NOW()
        )
        ON CONFLICT (sheriff_number) DO NOTHING`,
       [
-        stub.sheriffNumber, stub.saleDate, stub.plaintiff, stub.defendant,
+        stub.sheriffNumber, county, stub.saleDate, stub.plaintiff, stub.defendant,
         addr.street, addr.city, addr.state, addr.zip,
         stub.detailUrl,
       ],
@@ -242,7 +299,7 @@ async function upsertStub(stub: ListingStub, exists: boolean): Promise<void> {
   }
 }
 
-async function upsertForeclosure(d: DetailedListing, isNew: boolean): Promise<void> {
+async function upsertForeclosure(d: DetailedListing, isNew: boolean, county: string): Promise<void> {
   const classif = classify(d.plaintiff, d.defendant, d.priorsLiensTaxes, d.propertyNotes);
 
   // Initial warnings without market value — recalculateDeal() will update after valuation
@@ -258,7 +315,7 @@ async function upsertForeclosure(d: DetailedListing, isNew: boolean): Promise<vo
   if (isNew) {
     await query(
       `INSERT INTO foreclosures (
-         sheriff_number, court_case_number, current_sale_date, original_sale_date,
+         sheriff_number, county, court_case_number, current_sale_date, original_sale_date,
          plaintiff, defendant, address, city, state, zip_code, attorney,
          approx_judgment, upset_amount, priors_liens_taxes, tax_lot, block,
          nearest_cross_street, occupancy_status, property_notes,
@@ -267,22 +324,23 @@ async function upsertForeclosure(d: DetailedListing, isNew: boolean): Promise<vo
          deal_rating, deal_score, deal_warnings,
          first_seen, last_seen, last_changed, last_detail_check, last_updated
        ) VALUES (
-         $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,
-         $20,$21,$22,$23,$24,$25,
-         'UNKNOWN',NULL,$26,
+         $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,
+         $21,$22,$23,$24,$25,$26,
+         'UNKNOWN',NULL,$27,
          NOW(),NOW(),NOW(),NOW(),NOW()
        )
        ON CONFLICT (sheriff_number) DO UPDATE SET
-         court_case_number=$2, current_sale_date=$3, original_sale_date=$4,
-         plaintiff=$5, defendant=$6, address=$7, city=$8, state=$9, zip_code=$10,
-         attorney=$11, approx_judgment=$12, upset_amount=$13, priors_liens_taxes=$14,
-         tax_lot=$15, block=$16, nearest_cross_street=$17, occupancy_status=$18,
-         property_notes=$19, detail_url=$20, google_maps_url=$21, zillow_url=$22,
-         foreclosure_type=$23, classification_confidence=$24, classification_evidence=$25,
-         deal_warnings=$26,
+         county=EXCLUDED.county,
+         court_case_number=$3, current_sale_date=$4, original_sale_date=$5,
+         plaintiff=$6, defendant=$7, address=$8, city=$9, state=$10, zip_code=$11,
+         attorney=$12, approx_judgment=$13, upset_amount=$14, priors_liens_taxes=$15,
+         tax_lot=$16, block=$17, nearest_cross_street=$18, occupancy_status=$19,
+         property_notes=$20, detail_url=$21, google_maps_url=$22, zillow_url=$23,
+         foreclosure_type=$24, classification_confidence=$25, classification_evidence=$26,
+         deal_warnings=$27,
          last_seen=NOW(), last_changed=NOW(), last_detail_check=NOW(), last_updated=NOW()`,
       [
-        d.sheriffNumber, d.courtCaseNumber, d.currentSaleDate, d.originalSaleDate,
+        d.sheriffNumber, county, d.courtCaseNumber, d.currentSaleDate, d.originalSaleDate,
         d.plaintiff, d.defendant, d.address, d.city, d.state, d.zipCode, d.attorney,
         d.approxJudgment, d.upsetAmount, d.priorsLiensTaxes, d.taxLot, d.block,
         d.nearestCrossStreet, d.occupancyStatus, d.propertyNotes,
@@ -294,17 +352,18 @@ async function upsertForeclosure(d: DetailedListing, isNew: boolean): Promise<vo
   } else {
     await query(
       `UPDATE foreclosures SET
-         court_case_number=$2, current_sale_date=$3, original_sale_date=$4,
-         plaintiff=$5, defendant=$6, address=$7, city=$8, state=$9, zip_code=$10,
-         attorney=$11, approx_judgment=$12, upset_amount=$13, priors_liens_taxes=$14,
-         tax_lot=$15, block=$16, nearest_cross_street=$17, occupancy_status=$18,
-         property_notes=$19, detail_url=$20, google_maps_url=$21, zillow_url=$22,
-         foreclosure_type=$23, classification_confidence=$24, classification_evidence=$25,
-         deal_warnings=$26,
+         county=$2,
+         court_case_number=$3, current_sale_date=$4, original_sale_date=$5,
+         plaintiff=$6, defendant=$7, address=$8, city=$9, state=$10, zip_code=$11,
+         attorney=$12, approx_judgment=$13, upset_amount=$14, priors_liens_taxes=$15,
+         tax_lot=$16, block=$17, nearest_cross_street=$18, occupancy_status=$19,
+         property_notes=$20, detail_url=$21, google_maps_url=$22, zillow_url=$23,
+         foreclosure_type=$24, classification_confidence=$25, classification_evidence=$26,
+         deal_warnings=$27,
          last_seen=NOW(), last_changed=NOW(), last_detail_check=NOW(), last_updated=NOW()
        WHERE sheriff_number=$1`,
       [
-        d.sheriffNumber, d.courtCaseNumber, d.currentSaleDate, d.originalSaleDate,
+        d.sheriffNumber, county, d.courtCaseNumber, d.currentSaleDate, d.originalSaleDate,
         d.plaintiff, d.defendant, d.address, d.city, d.state, d.zipCode, d.attorney,
         d.approxJudgment, d.upsetAmount, d.priorsLiensTaxes, d.taxLot, d.block,
         d.nearestCrossStreet, d.occupancyStatus, d.propertyNotes,

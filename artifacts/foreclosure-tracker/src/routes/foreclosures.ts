@@ -29,6 +29,7 @@ foreclosuresRouter.get("/", async (req, res) => {
     const maxUpset   = req.query["maxUpset"]   ? parseFloat(String(req.query["maxUpset"]))   : null;
     const type       = req.query["type"]       ? String(req.query["type"])                   : null;
     const rating     = req.query["rating"]     ? String(req.query["rating"]).toUpperCase()   : null;
+    const county     = req.query["county"]     ? String(req.query["county"])                 : null;
     const missingUpset  = req.query["missingUpset"]      === "true";
     const unknownVal    = req.query["unknownValuation"]  === "true";
     const page      = Math.max(1, parseInt(String(req.query["page"]  ?? "1")));
@@ -59,6 +60,10 @@ foreclosuresRouter.get("/", async (req, res) => {
       params.push(rating);
     }
     if (unknownVal) conditions.push(`deal_rating = 'UNKNOWN'`);
+    if (county && ["Atlantic", "Cape May"].includes(county)) {
+      conditions.push(`county = $${pi++}`);
+      params.push(county);
+    }
 
     const where = `WHERE ${conditions.join(" AND ")}`;
 
@@ -131,6 +136,7 @@ function formatForeclosure(row: any): Record<string, unknown> {
   return {
     // Identity
     sheriffNumber:            row.sheriff_number,
+    county:                   row.county ?? "Atlantic",
     courtCaseNumber:          row.court_case_number ?? null,
     currentSaleDate:          row.current_sale_date ?? null,
     originalSaleDate:         row.original_sale_date ?? null,

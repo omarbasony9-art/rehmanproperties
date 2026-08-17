@@ -2,7 +2,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import express, { type Request, type Response, type NextFunction } from "express";
 import rateLimit from "express-rate-limit";
-import { runRefresh } from "./refresh.js";
+import { runRefresh, runAllRefresh } from "./refresh.js";
 import { foreclosuresRouter } from "./routes/foreclosures.js";
 import { dealsRouter } from "./routes/deals.js";
 import { healthRouter } from "./routes/health.js";
@@ -80,11 +80,17 @@ app.post("/api/refresh", async (req: Request, res: Response) => {
   );
   const runId = runRows[0]?.id;
 
+  // county param: "Atlantic" | "Cape May" | "all" (default: "all" = both)
+  const countyParam = String(req.query["county"] ?? "all");
+  const refreshFn = countyParam === "Atlantic" ? () => runRefresh("Atlantic")
+                  : countyParam === "Cape May"  ? () => runRefresh("Cape May")
+                  : () => runAllRefresh();
+
   // Respond immediately — let the scrape run in the background
-  res.json({ status: "refresh_started", runId });
+  res.json({ status: "refresh_started", runId, county: countyParam });
 
   // Run in background (fire-and-forget)
-  runRefresh()
+  refreshFn()
     .then(async (result) => {
       if (runId) {
         await query(

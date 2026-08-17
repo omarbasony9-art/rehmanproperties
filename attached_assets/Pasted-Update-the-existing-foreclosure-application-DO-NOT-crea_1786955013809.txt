@@ -1,0 +1,188 @@
+Update the existing foreclosure application.
+
+DO NOT create separate tabs/pages for each county.
+
+I want the **All Listings** tab to contain a **County dropdown filter**.
+
+## COUNTY DROPDOWN
+
+At the top of the All Listings page, above the listings table, add a dropdown labeled:
+
+**County**
+
+Options:
+
+* All Counties
+* Atlantic County
+* Cape May County
+
+Default:
+
+**All Counties**
+
+## FILTER BEHAVIOR
+
+When I select:
+
+### All Counties
+
+Show listings from every county currently loaded into the system.
+
+### Atlantic County
+
+Show ONLY Atlantic County listings.
+
+### Cape May County
+
+Show ONLY Cape May County listings.
+
+The table should update immediately when the county changes.
+
+Do not require a page reload.
+
+## CAPE MAY SOURCE
+
+Cape May County CivilView source:
+
+`https://salesweb.civilview.com/Sales/SalesSearch?countyId=52`
+
+Store those records with:
+
+`county = "Cape May"`
+
+Atlantic County records should be stored with:
+
+`county = "Atlantic"`
+
+Every listing in the database must have a county associated with it.
+
+## TABLE
+
+Keep the existing All Listings table.
+
+Do NOT create a different table for Cape May.
+
+Keep the existing columns including:
+
+* Address
+* County
+* Type
+* Upset
+* Zillow
+* Redfin
+* Market Value
+* Spread
+* DISC %
+* Warnings
+* Sale Date
+* Sheriff #
+
+If the County column does not currently exist, add it.
+
+## SORTING
+
+County filtering must work together with existing sorting.
+
+Keep the default UPSET sorting:
+
+**lowest UPSET → highest UPSET**
+
+So if Cape May County is selected, show Cape May listings only and sort those listings from lowest upset amount to highest.
+
+If Atlantic County is selected, do the same for Atlantic listings.
+
+Do not sort currency as text. Continue sorting UPSET numerically.
+
+## SEARCH + FILTERS
+
+The County dropdown must work together with:
+
+* Search
+* Type filters
+* Warning filters
+* Sale status filters
+* Other existing filters
+* Column sorting
+
+Example:
+
+County = Cape May County
+Search = Wildwood
+
+Result:
+
+Only Cape May County listings matching Wildwood.
+
+## DESIGN
+
+Make the dropdown look like a normal professional filter control.
+
+Place it near the other All Listings controls.
+
+Example:
+
+`County: [ All Counties ▼ ]`
+
+Do NOT make a huge custom dropdown.
+
+Use the same styling as the existing application.
+
+## DATABASE / API
+
+Do not simply hide rows visually if the application already supports server-side filtering.
+
+Add support for something like:
+
+`county=Atlantic`
+
+`county=Cape May`
+
+to the listings API/query system where appropriate.
+
+For large datasets, filter at the database/API level instead of downloading every record just to filter in the browser.
+
+## REFRESH / SYNC
+
+The existing refresh system should know which source belongs to each county.
+
+Atlantic County:
+Use the existing Atlantic County CivilView source.
+
+Cape May County:
+
+`https://salesweb.civilview.com/Sales/SalesSearch?countyId=52`
+
+When syncing Cape May, save those records as Cape May County.
+
+When syncing Atlantic, save those records as Atlantic County.
+
+Do not mix the two sources together incorrectly.
+
+## DEDUPLICATION
+
+Use:
+
+`county + sheriff_number`
+
+as the main unique identity where appropriate.
+
+A Cape May sheriff number and Atlantic sheriff number should never overwrite one another just because the numbers happen to match.
+
+## IMPORTANT
+
+Do NOT:
+
+* Create a separate Cape May page
+* Create a separate Cape May table
+* Remove Atlantic County
+* Break Zillow
+* Break Redfin
+* Break Market Value
+* Break Spread
+* Break DISC %
+* Break UPSET sorting
+* Break search
+
+I want ONE All Listings system with a County dropdown that controls which county's listings I am viewing.
+
+Implement and test it now.

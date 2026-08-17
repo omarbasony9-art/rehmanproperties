@@ -32,6 +32,7 @@ const BASE = "/foreclosure-tracker/api";
 
 interface Listing {
   sheriffNumber: string;
+  county: string;
   courtCaseNumber: string | null;
   currentSaleDate: string | null;
   originalSaleDate: string | null;
@@ -409,6 +410,7 @@ export default function AdminForeclosures() {
   const queryClient = useQueryClient();
   const [tab, setTab]     = useState<TabId>("all");
   const [page, setPage]   = useState(1);
+  const [county, setCounty] = useState<string>("all");
   const [sortBy,  setSortBy]  = useState<string>("upset");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [selected, setSelected] = useState<Listing | null>(null);
@@ -428,10 +430,11 @@ export default function AdminForeclosures() {
     page: String(page), limit: String(LIMIT),
     sortBy, sortDir,
     ...activeTab.params,
+    ...(county !== "all" ? { county } : {}),
   });
 
   const listQ = useQuery<ListResponse>({
-    queryKey: ["fc-listings", tab, page, sortBy, sortDir],
+    queryKey: ["fc-listings", tab, page, sortBy, sortDir, county],
     queryFn: () => fetch(`${BASE}/foreclosures?${params}`).then((r) => r.json()),
   });
 
@@ -440,6 +443,7 @@ export default function AdminForeclosures() {
   const health     = healthQ.data;
 
   const handleTabChange = (id: TabId) => { setTab(id); setPage(1); };
+  const handleCountyChange = (c: string) => { setCounty(c); setPage(1); };
 
   const handleSort = (col: string) => {
     if (col === sortBy) {
@@ -574,6 +578,23 @@ export default function AdminForeclosures() {
           </div>
         )}
 
+        {/* County filter — sits above the tab bar */}
+        <div className="flex items-center gap-2">
+          <label htmlFor="county-select" className="text-sm font-medium text-muted-foreground whitespace-nowrap">
+            County
+          </label>
+          <select
+            id="county-select"
+            value={county}
+            onChange={(e) => handleCountyChange(e.target.value)}
+            className="h-8 rounded-md border border-input bg-background px-2.5 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+          >
+            <option value="all">All Counties</option>
+            <option value="Atlantic">Atlantic County</option>
+            <option value="Cape May">Cape May County</option>
+          </select>
+        </div>
+
         {/* Tabs */}
         <div className="flex flex-wrap gap-1 border-b">
           {TABS.map((t) => (
@@ -612,6 +633,7 @@ export default function AdminForeclosures() {
                     <SortTh col="sheriff"  label="Sheriff #" />
                     <SortTh col="date"     label="Sale Date" />
                     <th className="px-3 py-3 text-left whitespace-nowrap">Address</th>
+                    <th className="px-3 py-3 text-left whitespace-nowrap">County</th>
                     <th className="px-3 py-3 text-left whitespace-nowrap">Type</th>
                     <SortTh col="upset"    label="Upset" />
                     <th className="px-3 py-3 text-left whitespace-nowrap">Zillow</th>
@@ -636,6 +658,7 @@ export default function AdminForeclosures() {
                         <td className="px-3 py-2.5 font-mono text-xs text-muted-foreground whitespace-nowrap">{item.sheriffNumber}</td>
                         <td className="px-3 py-2.5 text-xs whitespace-nowrap tabular-nums">{fmtDate(item.currentSaleDate)}</td>
                         <td className="px-3 py-2.5 max-w-[180px] truncate">{addr || "—"}</td>
+                        <td className="px-3 py-2.5 text-xs whitespace-nowrap text-muted-foreground">{item.county ?? "Atlantic"}</td>
                         <td className="px-3 py-2.5 text-xs whitespace-nowrap">{TYPE_LABELS[item.foreclosureType ?? ""] ?? "—"}</td>
                         <td className="px-3 py-2.5 tabular-nums whitespace-nowrap font-medium">{fmt$(item.upsetAmount) ?? "—"}</td>
                         <td className="px-3 py-2.5 tabular-nums whitespace-nowrap">

@@ -127,6 +127,10 @@ export async function initDb(): Promise<void> {
   await query(`ALTER TABLE foreclosures ADD COLUMN IF NOT EXISTS zillow_property_url TEXT`);
   // Manually excluded properties are hidden from all views and never re-activated by the scraper
   await query(`ALTER TABLE foreclosures ADD COLUMN IF NOT EXISTS permanently_excluded BOOLEAN DEFAULT FALSE`);
+  // County — which CivilView source the record came from (Atlantic | Cape May | …)
+  await query(`ALTER TABLE foreclosures ADD COLUMN IF NOT EXISTS county TEXT NOT NULL DEFAULT 'Atlantic'`);
+  // Backfill any pre-county rows
+  await query(`UPDATE foreclosures SET county='Atlantic' WHERE county IS NULL OR county=''`);
   // RentCast AVM — third valuation source, used when Zillow + Redfin both unavailable
   await query(`ALTER TABLE foreclosures ADD COLUMN IF NOT EXISTS rentcast_estimate    NUMERIC`);
   await query(`ALTER TABLE foreclosures ADD COLUMN IF NOT EXISTS rentcast_fetched_at  TIMESTAMPTZ`);
