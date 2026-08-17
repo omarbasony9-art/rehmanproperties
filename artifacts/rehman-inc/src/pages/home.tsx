@@ -40,7 +40,7 @@ export default function HomePage() {
       <section className="relative min-h-[90vh] flex items-center justify-center pt-20">
         <div className="absolute inset-0 z-0">
           <img 
-            src="/attached_assets/generated_images/hero-home.jpg" 
+            src={`${import.meta.env.BASE_URL}hero-home.jpg`}
             alt="Residential property" 
             className="w-full h-full object-cover"
           />
