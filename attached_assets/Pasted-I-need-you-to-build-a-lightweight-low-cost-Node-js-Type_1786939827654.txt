@@ -1,0 +1,738 @@
+I need you to build a lightweight, low-cost Node.js/TypeScript API for tracking Atlantic County, New Jersey sheriff foreclosure sales.
+
+IMPORTANT:
+- NO OpenAI.
+- NO LLM.
+- NO AI classification.
+- Do not use expensive background processes.
+- Do not continuously scrape.
+- Keep CPU, RAM, database usage, and Replit deployment costs as low as possible.
+- Design this for a Replit Autoscale Deployment that can sleep when unused.
+- Avoid browser automation such as Playwright/Puppeteer unless absolutely necessary.
+- Prefer normal HTTP requests + Cheerio HTML parsing.
+- Do NOT repeatedly request pages that have not changed.
+
+SOURCE:
+https://salesweb.civilview.com/Sales/SalesSearch?countyId=25
+
+COUNTY:
+Atlantic County, New Jersey.
+
+==================================================
+MAIN GOAL
+==================================================
+
+The program should retrieve all current Atlantic County Sheriff foreclosure sales and create structured records.
+
+For every listing collect:
+
+1. Sheriff #
+2. Court Case #
+3. Current Sale Date
+4. Original Sale Date
+5. Plaintiff
+6. Defendant
+7. Property Address
+8. City
+9. State
+10. ZIP Code
+11. Attorney
+12. Approximate Judgment
+13. Upset Amount
+14. Priors / Liens / Taxes
+15. Tax Lot
+16. Block
+17. Nearest Cross Street
+18. Occupancy Status
+19. Property Notes
+20. Status History
+21. Detail page URL
+22. Google Maps URL
+23. Zillow search URL
+24. Last Updated timestamp
+
+The program MUST open the individual CivilView detail page for each sheriff sale.
+
+The current sale date must account for adjournments.
+
+Example:
+
+Scheduled 7/16/2026
+Defendant Adjourned to 8/13/2026
+Defendant Adjourned to 9/10/2026
+
+Current Sale Date should be:
+
+9/10/2026
+
+But Status History should contain all three entries.
+
+==================================================
+FORECLOSURE TYPE
+==================================================
+
+Classify every sale using deterministic rules only.
+
+Allowed values:
+
+mortgage_foreclosure
+tax_foreclosure
+lien_foreclosure
+unknown
+
+DO NOT use AI.
+
+DO NOT classify something as a tax foreclosure just because the notice mentions unpaid taxes or a tax lien.
+
+The program must determine what lien/debt is actually being foreclosed.
+
+TAX FORECLOSURE indicators include strong language such as:
+
+"Tax Sale Certificate"
+"Foreclosure of Tax Sale Certificate"
+"holder of tax sale certificate"
+"tax certificate foreclosure"
+
+LIEN FORECLOSURE indicators include things such as:
+
+"Condominium Association"
+"Homeowners Association"
+"HOA"
+"assessment lien"
+"condominium lien"
+"mechanic's lien"
+"judgment lien"
+
+MORTGAGE FORECLOSURE indicators include:
+
+mortgage
+mortgagee
+mortgagor
+mortgage debt
+bank/lender plaintiff
+mortgage foreclosure language
+
+Return:
+
+foreclosureType
+classificationConfidence
+classificationEvidence
+
+classificationConfidence values:
+
+high
+medium
+low
+
+classificationEvidence should explain which deterministic rule matched.
+
+==================================================
+$280,000 FILTER
+==================================================
+
+I mainly want sheriff sales with:
+
+Upset Amount <= $280,000
+
+Create endpoint:
+
+GET /api/foreclosures?maxUpset=280000
+
+Do NOT confuse:
+
+Upset Amount
+
+with:
+
+Estimated Market Value
+
+They are separate fields.
+
+Also support:
+
+GET /api/foreclosures?maxMarketValue=280000
+
+==================================================
+PROPERTY VALUE LOOKUP
+==================================================
+
+After getting the address, look up property information using a legitimate property-data API.
+
+Create a provider abstraction so I can use:
+
+RentCast
+
+or another approved property data service.
+
+Environment variable:
+
+RENTCAST_API_KEY
+
+DO NOT scrape Zillow pages.
+
+A Zillow search URL can be provided for manually viewing the property.
+
+Try to retrieve:
+
+estimatedMarketValue
+activeListingPrice
+lastSalePrice
+lastSaleDate
+taxAssessedValue
+bedrooms
+bathrooms
+squareFeet
+yearBuilt
+propertyType
+comparableSales
+
+Cache property valuations.
+
+DO NOT request the valuation API again every scrape if the property was valued recently.
+
+Property valuation cache TTL:
+
+7 days
+
+==================================================
+MAJOR DEAL DETECTION
+==================================================
+
+This is very important.
+
+Automatically identify potentially major deals.
+
+Use deterministic financial calculations only.
+
+Calculate:
+
+estimatedSpread =
+estimatedMarketValue - upsetAmount
+
+discountPercent =
+(estimatedMarketValue - upsetAmount) / estimatedMarketValue * 100
+
+equityMultiple =
+estimatedMarketValue / upsetAmount
+
+Create these deal levels:
+
+MAJOR DEAL
+
+Requirements:
+
+estimatedMarketValue exists
+AND
+upsetAmount exists
+AND
+upsetAmount <= 280000
+AND
+discountPercent >= 30
+AND
+estimatedSpread >= 75000
+
+STRONG DEAL
+
+discountPercent >= 20
+AND
+estimatedSpread >= 50000
+
+EXTREME DEAL
+
+discountPercent >= 40
+AND
+estimatedSpread >= 100000
+
+If an EXTREME DEAL qualifies, it should also count as a major deal but its displayed dealRating should be:
+
+EXTREME
+
+Possible dealRating values:
+
+EXTREME
+MAJOR
+STRONG
+NORMAL
+UNKNOWN
+
+Return:
+
+dealRating
+estimatedSpread
+discountPercent
+equityMultiple
+
+Also calculate a numeric:
+
+dealScore
+
+from 0-100.
+
+Suggested scoring:
+
+Discount percentage = up to 50 points
+Dollar spread = up to 30 points
+Low upset amount = up to 10 points
+Property data confidence = up to 10 points
+
+Do NOT pretend this means the property is definitely profitable.
+
+It is only an automated screening score.
+
+==================================================
+DEAL WARNINGS
+==================================================
+
+Also create:
+
+dealWarnings: []
+
+Possible warnings:
+
+KNOWN_PRIOR_LIEN
+TAX_LIEN
+MUNICIPAL_LIEN
+HOA_LIEN
+UNKNOWN_MARKET_VALUE
+NO_UPSET_AMOUNT
+OWNER_OCCUPIED
+PROPERTY_DATA_MISSING
+
+A property can still be a major deal while having warnings.
+
+Do not silently exclude it.
+
+==================================================
+MAJOR DEAL API
+==================================================
+
+Create:
+
+GET /api/deals
+
+Return only:
+
+EXTREME
+MAJOR
+STRONG
+
+Sort by dealScore descending.
+
+Also support:
+
+GET /api/deals?rating=EXTREME
+
+GET /api/deals?minimumDiscount=30
+
+GET /api/deals?minimumSpread=75000
+
+GET /api/deals?maxUpset=280000
+
+==================================================
+INDIVIDUAL PROPERTY
+==================================================
+
+Create:
+
+GET /api/foreclosures/:sheriffNumber
+
+Example:
+
+GET /api/foreclosures/F-26000646
+
+Return the complete property record.
+
+==================================================
+REFRESH SYSTEM
+==================================================
+
+Create:
+
+POST /api/refresh
+
+This should scrape CivilView and update the stored data.
+
+Protect this endpoint with:
+
+REFRESH_SECRET
+
+Example:
+
+Authorization: Bearer REFRESH_SECRET
+
+Do not scrape CivilView every time someone opens /api/foreclosures.
+
+Instead:
+
+/api/refresh
+
+updates the database/cache.
+
+/api/foreclosures
+
+reads existing stored results.
+
+This is important for keeping Replit costs low and avoiding unnecessary requests to CivilView.
+
+==================================================
+SMART REFRESH / LOW COST
+==================================================
+
+The refresh process must be optimized.
+
+First retrieve the main CivilView list.
+
+Compare:
+
+Sheriff #
+Sale Date
+listing/detail identifier
+
+against stored records.
+
+Only re-process a detail page when:
+
+1. Sheriff # is new
+2. Sale date changed
+3. Listing status changed
+4. It has not been checked in 24 hours
+
+Do not re-run external property valuation unless:
+
+1. Property is new
+2. Address changed
+3. Valuation is older than 7 days
+
+Limit concurrent HTTP requests.
+
+Maximum:
+
+3 concurrent requests
+
+Use small delays if needed.
+
+Do not aggressively scrape.
+
+==================================================
+DATABASE
+==================================================
+
+Keep storage lightweight.
+
+Use PostgreSQL if Replit database is already available.
+
+Otherwise use the simplest persistent Replit database option.
+
+Tables:
+
+foreclosures
+status_history
+property_values
+refresh_runs
+
+foreclosures should have a unique constraint on:
+
+sheriff_number
+
+Do not duplicate sheriff sales.
+
+==================================================
+GOOGLE SHEETS
+==================================================
+
+The API will eventually feed a Google Sheet.
+
+Make JSON easy for Google Apps Script to consume.
+
+Create:
+
+GET /api/export/google-sheets
+
+Return a flat array with columns:
+
+Sheriff #
+Court Case #
+Sale Date
+Plaintiff
+Defendant
+Address
+Foreclosure Type
+Approx Judgment
+Upset Amount
+Estimated Market Value
+Estimated Spread
+Discount %
+Deal Rating
+Deal Score
+Priors/Liens/Taxes
+Attorney
+Occupancy
+Google Maps
+Zillow Search
+CivilView URL
+Last Updated
+
+==================================================
+CHANGED / NEW DEALS
+==================================================
+
+Track when a property first appears.
+
+Fields:
+
+firstSeen
+lastSeen
+lastChanged
+
+Also create:
+
+isNew
+
+true when first discovered within the past 48 hours.
+
+Create:
+
+GET /api/deals/new
+
+Return major/strong/extreme deals discovered in the past 48 hours.
+
+==================================================
+CHANGES THAT SHOULD TRIGGER A RECHECK
+==================================================
+
+Detect:
+
+sale date changed
+sale adjourned
+upset amount changed
+judgment changed
+property removed
+new property
+status changed
+
+Store those changes.
+
+==================================================
+HEALTH ENDPOINT
+==================================================
+
+GET /api/health
+
+Return:
+
+{
+  "status": "ok",
+  "lastRefresh": "...",
+  "listingCount": 0,
+  "majorDeals": 0
+}
+
+==================================================
+ADMIN PAGE
+==================================================
+
+Create a very basic lightweight admin page.
+
+Do NOT use a heavy UI framework unless already installed.
+
+Show:
+
+Total properties
+Properties under $280K
+Extreme Deals
+Major Deals
+Strong Deals
+Last refresh
+
+Table columns:
+
+Deal Rating
+Deal Score
+Sheriff #
+Sale Date
+Address
+Foreclosure Type
+Upset Amount
+Estimated Market Value
+Estimated Spread
+Discount %
+Warnings
+
+Default sorting:
+
+Deal Score highest first.
+
+Add filters:
+
+EXTREME
+MAJOR
+STRONG
+Under $280K
+Mortgage
+Tax
+Lien
+
+Clicking a property opens its complete details.
+
+Add a Refresh button that calls POST /api/refresh.
+
+==================================================
+COST REQUIREMENTS
+==================================================
+
+This must be built specifically to minimize Replit costs.
+
+DO NOT:
+
+- use an always-running loop
+- scrape every minute
+- use websockets
+- use AI
+- use OpenAI
+- use Puppeteer unless CivilView cannot be parsed normally
+- repeatedly request unchanged pages
+- repeatedly call property APIs
+- run expensive cron loops inside Node
+
+The application should be able to sleep when nobody is using it.
+
+Use Replit Autoscale Deployment.
+
+Google Apps Script or an external scheduled HTTP request can call:
+
+POST /api/refresh
+
+approximately TWO TIMES PER DAY.
+
+Suggested refresh times:
+
+8:00 AM America/New_York
+6:00 PM America/New_York
+
+Also allow manual refresh.
+
+==================================================
+SECURITY
+==================================================
+
+Keep all secrets server-side.
+
+Use environment variables:
+
+REFRESH_SECRET
+RENTCAST_API_KEY
+DATABASE_URL
+
+Never expose API keys in frontend JavaScript.
+
+Add rate limiting to public API endpoints.
+
+==================================================
+ERROR HANDLING
+==================================================
+
+If CivilView is temporarily unavailable:
+
+do NOT delete existing data.
+
+Keep the previous successful dataset.
+
+Record the failed refresh.
+
+Return the previous data.
+
+If one individual property fails:
+
+continue processing the other properties.
+
+==================================================
+LOGGING
+==================================================
+
+Keep logs minimal to reduce storage.
+
+For refreshes only store:
+
+startedAt
+completedAt
+numberFound
+numberNew
+numberUpdated
+numberFailed
+majorDealsFound
+error
+
+Do not create huge debug logs.
+
+==================================================
+TESTING
+==================================================
+
+Create tests for:
+
+money parsing
+date parsing
+foreclosure classification
+deal score
+deal rating
+adjourned dates
+duplicate sheriff numbers
+
+Use this example during testing:
+
+Sheriff #: F-26000646
+
+Court Case #: F-002616-25
+
+Current Sale Date:
+9/10/2026
+
+Plaintiff:
+Joy St. James, Assignee for the 1031 Exchange Specialists, Inc
+
+Defendant:
+Jeffery Solano and Evolve Bank and Trust
+
+Address:
+1135 Mays Landing Somers Point Road
+Egg Harbor Township NJ 08234
+
+Approx Judgment:
+413562.20
+
+Upset Amount:
+443768.96
+
+Occupancy:
+Owner Occupied
+
+Tax Lot:
+701
+
+Block:
+8101
+
+Original Scheduled Date:
+7/16/2026
+
+Adjourned:
+8/13/2026
+
+Adjourned again:
+9/10/2026
+
+This property should NOT pass maxUpset=280000 because:
+
+443768.96 > 280000.
+
+==================================================
+
+Before changing existing files:
+
+1. Inspect the current project.
+2. Reuse existing architecture where reasonable.
+3. Do not break existing functionality.
+4. Do not add unnecessary packages.
+5. Show me exactly what files were created/changed.
+6. Run typecheck/tests.
+7. Give me the exact Replit deployment settings to use.

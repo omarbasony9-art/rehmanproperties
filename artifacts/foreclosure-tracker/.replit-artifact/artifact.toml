@@ -1,0 +1,36 @@
+kind = "web"
+previewPath = "/foreclosure-tracker/"
+title = "Foreclosure Tracker"
+description = "A lightweight Node.js/TypeScript API that scrapes Atlantic County NJ sheriff foreclosure sales from CivilView, classifies them deterministically, scores deals against estimated market values via RentCast, and exposes a REST API plus a plain-HTML admin dashboard. Designed for Replit Autoscale — sleeps when idle, refreshes on demand via a secret-protected POST endpoint."
+version = "1.0.0"
+id = "artifacts/foreclosure-tracker"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/foreclosure-tracker/" ]
+localPort = 25309
+
+[services.development]
+run = "pnpm --filter @workspace/foreclosure-tracker run dev"
+
+[services.production]
+
+[services.production.build]
+args = ["pnpm", "--filter", "@workspace/foreclosure-tracker", "run", "build"]
+
+[services.production.build.env]
+NODE_ENV = "production"
+
+[services.production.run]
+args = ["node", "--enable-source-maps", "artifacts/foreclosure-tracker/dist/index.mjs"]
+
+[services.production.run.env]
+PORT = "25309"
+NODE_ENV = "production"
+
+[services.production.health.startup]
+path = "/foreclosure-tracker/api/health"
+
+[services.env]
+PORT = "25309"
